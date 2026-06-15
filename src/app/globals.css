@@ -2,26 +2,230 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+/* ─── Variables de thème OLED Dark Premium ───────────────────────────────── */
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+    --card: 224 71% 6%;
+    --card-foreground: 213 31% 91%;
+    --popover: 224 71% 5%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 43 96% 56%;
+    --primary-foreground: 224 71% 4%;
+    --secondary: 160 84% 39%;
+    --secondary-foreground: 213 31% 91%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 43 96% 56%;
+    --accent-foreground: 224 71% 4%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 213 31% 91%;
+    --border: 216 34% 14%;
+    --input: 216 34% 14%;
+    --ring: 43 96% 56%;
+    --radius: 0.625rem;
+
+    /* NourQuran tokens */
+    --gold: 43 96% 56%;
+    --gold-muted: 43 60% 40%;
+    --emerald: 160 84% 39%;
+    --studio-bg: 224 71% 3%;
+    --studio-panel: 224 71% 6%;
+    --studio-surface: 224 71% 8%;
+    --studio-border: 216 34% 13%;
+    --studio-border-bright: 216 34% 20%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Sélection de texte dorée */
+  ::selection {
+    background: hsl(43 96% 56% / 0.25);
+    color: hsl(43 96% 80%);
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+/* ─── Polices arabes ─────────────────────────────────────────────────────── */
+.font-uthmanic     { font-family: "Noto Naskh Arabic", "Amiri", serif; }
+.font-amiri        { font-family: "Amiri", serif; }
+.font-scheherazade { font-family: "Scheherazade New", "Amiri", serif; }
+
+/* ─── Texte arabe RTL ────────────────────────────────────────────────────── */
+.arabic-text {
+  direction: rtl;
+  unicode-bidi: bidi-override;
+  font-feature-settings: "kern" 1;
+  line-height: 2;
 }
 
+/* ─── Scrollbar premium ──────────────────────────────────────────────────── */
+.studio-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--studio-border-bright)) transparent;
+}
+.studio-scrollbar::-webkit-scrollbar       { width: 4px; }
+.studio-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.studio-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--studio-border-bright));
+  border-radius: 99px;
+}
+.studio-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--gold) / 0.4);
+}
+
+/* ─── Layout studio ──────────────────────────────────────────────────────── */
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+
+  /* Gradients */
+  .gradient-gold {
+    background: linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(43 80% 68%) 100%);
+  }
+  .gradient-studio {
+    background: radial-gradient(
+      ellipse 120% 80% at 50% -20%,
+      hsl(224 71% 8%) 0%,
+      hsl(224 71% 3%) 60%
+    );
+  }
+  .gradient-panel {
+    background: linear-gradient(180deg,
+      hsl(var(--studio-surface)) 0%,
+      hsl(var(--studio-panel)) 100%
+    );
+  }
+
+  /* Glassmorphisme */
+  .glass {
+    background: hsl(var(--studio-panel) / 0.6);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid hsl(var(--studio-border-bright) / 0.5);
+  }
+  .glass-heavy {
+    background: hsl(var(--studio-panel) / 0.85);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border: 1px solid hsl(var(--gold) / 0.12);
+  }
+
+  /* Glow effects */
+  .glow-gold {
+    box-shadow: 0 0 20px hsl(var(--gold) / 0.15), 0 0 60px hsl(var(--gold) / 0.05);
+  }
+  .glow-gold-text {
+    text-shadow: 0 0 20px hsl(var(--gold) / 0.5), 0 0 40px hsl(var(--gold) / 0.2);
+  }
+  .glow-emerald {
+    box-shadow: 0 0 20px hsl(var(--emerald) / 0.2), 0 0 60px hsl(var(--emerald) / 0.05);
+  }
+
+  /* Borders lumineux */
+  .border-glow {
+    border: 1px solid hsl(var(--gold) / 0.3);
+    box-shadow: 0 0 0 1px hsl(var(--gold) / 0.1) inset;
+  }
+
+  /* Noise texture subtile */
+  .noise::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  /* Text utilities */
+  .text-balance { text-wrap: balance; }
+  .text-gradient-gold {
+    background: linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(43 80% 75%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* ─── Karaoké mot-à-mot ──────────────────────────────────────────────────── */
+.word-active {
+  color: hsl(var(--gold));
+  text-shadow: 0 0 20px hsl(var(--gold) / 0.7), 0 0 40px hsl(var(--gold) / 0.4);
+  transition: color 80ms ease, text-shadow 80ms ease;
+}
+.word-past   { color: hsl(var(--muted-foreground)); }
+.word-future { color: hsl(var(--foreground)); }
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes kenBurns {
+  0%   { transform: scale(1)    translateX(0); }
+  100% { transform: scale(1.08) translateX(-2%); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes pulseGold {
+  0%, 100% { box-shadow: 0 0 0 0   hsl(43 96% 56% / 0.4); }
+  50%       { box-shadow: 0 0 0 8px hsl(43 96% 56% / 0); }
+}
+@keyframes spinSlow {
+  to { transform: rotate(360deg); }
+}
+
+.ken-burns { animation: kenBurns 12s ease-in-out alternate infinite; }
+
+/* ─── Skeleton loader ────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--studio-surface)) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 0.375rem;
+}
+
+/* ─── Microinteractions ──────────────────────────────────────────────────── */
+.interactive {
+  @apply transition-all duration-200 cursor-pointer;
+}
+.interactive:hover {
+  @apply brightness-110;
+}
+.btn-ghost {
+  @apply interactive rounded-lg px-3 py-2 text-muted-foreground hover:text-foreground hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-ring/50;
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

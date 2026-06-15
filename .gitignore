@@ -28,9 +28,21 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# SQLite
+prisma/dev.db
+prisma/*.db
+
+# Remotion renders & cache
+public/exports/
+public/backgrounds/cache/
+
+# Uploads utilisateur
+public/uploads/
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.env*
