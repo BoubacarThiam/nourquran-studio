@@ -49,8 +49,28 @@ export async function loadChapterData(
 
   const verses = mergeTimings(rawVerses, chapterAudio, reciterId, surahId);
 
-  const totalDurationMs = chapterAudio?.durationMs
-    ?? verses.reduce((acc, v) => acc + (((v as unknown as Record<string, number>)._durationMs) ?? 5000), 0);
+  type EnrichedVerse = typeof verses[number] & {
+    _timestampFrom: number;
+    _timestampTo:   number;
+    _durationMs:    number;
+  };
+  const enriched = verses as EnrichedVerse[];
+
+  // Durée de la plage sélectionnée, pas du chapitre entier.
+  // Quand on sélectionne un verset partiel, totalDurationMs doit correspondre
+  // à la durée réelle de la sélection pour que le player soit à la bonne longueur.
+  const totalDurationMs = (() => {
+    if (!chapterAudio || enriched.length === 0) {
+      return enriched.reduce((acc, v) => acc + (v._durationMs ?? 5000), 0);
+    }
+    const first = enriched[0];
+    const last  = enriched[enriched.length - 1];
+    const start = first._timestampFrom ?? 0;
+    const end   = (last._timestampTo > 0)
+      ? last._timestampTo
+      : (last._timestampFrom ?? 0) + (last._durationMs ?? 5000);
+    return Math.max(end - start, 1000);
+  })();
 
   // Pour les reciters sans QuranCDN (Luhaidan, Maher), utiliser le template mp3quran.net
   const chapterAudioUrl = chapterAudio?.audioUrl ?? buildChapterAudioUrl(reciterId, surahId);

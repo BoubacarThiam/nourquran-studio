@@ -37,6 +37,12 @@ export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) =>
   const introDurationFrames = intro.enabled ? msToFrames(intro.durationSec * 1000) : 0;
   const outroDurationFrames = outro.enabled ? msToFrames(outro.durationSec * 1000) : 0;
 
+  // Offset absolu du premier verset dans l'audio du chapitre.
+  // Permet de repositionner les versets à 0 quand l'utilisateur ne sélectionne
+  // qu'une plage (ex : verset 255 de la Baqarah ne doit pas apparaître à 1h47).
+  const firstVerse = verses[0] as RenderVerse | undefined;
+  const rangeOffsetMs = firstVerse?._chapterAudio ? (firstVerse._timestampFrom ?? 0) : 0;
+
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
       {/* ── Fond (vidéo / image / couleur) ──────────────────────────── */}
@@ -51,7 +57,16 @@ export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) =>
 
       {/* ── Audio chapitre complet ───────────────────────────────────── */}
       {chapterAudioUrl && (
-        <Audio src={chapterAudioUrl} volume={reciterVolume} />
+        rangeOffsetMs > 0 ? (
+          // Seek dans l'audio en décalant la Sequence vers le passé.
+          // from={-N} fait démarrer le compteur interne à N : l'audio joue
+          // depuis le bon timestamp du chapitre dès le frame 0 de la composition.
+          <Sequence from={-msToFrames(rangeOffsetMs)}>
+            <Audio src={chapterAudioUrl} volume={reciterVolume} />
+          </Sequence>
+        ) : (
+          <Audio src={chapterAudioUrl} volume={reciterVolume} />
+        )
       )}
 
       {/* ── Son ambiant ─────────────────────────────────────────────── */}
@@ -76,7 +91,7 @@ export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) =>
         const renderVerse = verse as RenderVerse;
 
         const fromFrame = renderVerse._chapterAudio
-          ? msToFrames(renderVerse._timestampFrom) + introDurationFrames
+          ? Math.max(0, msToFrames(renderVerse._timestampFrom - rangeOffsetMs)) + introDurationFrames
           : introDurationFrames + verses.slice(0, verses.indexOf(verse)).reduce(
               (acc, v) => acc + msToFrames((v as RenderVerse)._durationMs ?? 5000),
               0

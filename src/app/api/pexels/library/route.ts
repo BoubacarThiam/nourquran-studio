@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchPexelsVideos } from "@/lib/pexels/client";
+import { getPexelsKey } from "@/lib/pexels/server";
 import fs from "fs";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +100,23 @@ async function buildLibrary(orientation: "portrait" | "landscape"): Promise<Reco
 export async function GET(req: NextRequest) {
   const orientation = (req.nextUrl.searchParams.get("orientation") ?? "portrait") as
     "portrait" | "landscape";
+
+  // Vérifier la clé Pexels avant toute chose — évite de renvoyer 12 catégories vides
+  // sans message d'erreur quand la clé n'est pas configurée.
+  try {
+    await getPexelsKey();
+  } catch {
+    return NextResponse.json(
+      {
+        error: "Clé Pexels manquante",
+        byCategory: {},
+        categories: Object.fromEntries(
+          Object.entries(CATEGORY_QUERIES).map(([k, v]) => [k, v.label])
+        ),
+      },
+      { status: 503 }
+    );
+  }
 
   const cached = readCache();
   if (cached) {

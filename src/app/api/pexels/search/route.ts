@@ -26,9 +26,9 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     const e = err as Error;
-    if (e.message?.includes("PEXELS_API_KEY")) {
+    if (e.message?.toLowerCase().includes("pexels") || e.message?.toLowerCase().includes("clé")) {
       return NextResponse.json(
-        { error: "Clé Pexels manquante. Configurer PEXELS_API_KEY dans .env.local" },
+        { error: "Clé Pexels manquante. Configurez-la dans Paramètres → API" },
         { status: 503 }
       );
     }
