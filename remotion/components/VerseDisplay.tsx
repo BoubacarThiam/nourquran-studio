@@ -67,19 +67,21 @@ export const VerseDisplay: React.FC<Props> = ({ verse, config, globalOffsetMs })
         opacity,
       }}
     >
-      {/* Numéro de verset */}
-      <div
-        style={{
-          fontFamily: "sans-serif",
-          fontSize: 16,
-          color: "rgba(250,189,0,0.65)",
-          letterSpacing: 6,
-          textTransform: "uppercase",
-          marginBottom: 8,
-        }}
-      >
-        ﴾ {verse.verse_key} ﴿
-      </div>
+      {/* Numéro de verset (absent pour la basmala, qui n'a pas de numéro réel) */}
+      {verse.verse_number > 0 && (
+        <div
+          style={{
+            fontFamily: "sans-serif",
+            fontSize: 16,
+            color: "rgba(250,189,0,0.65)",
+            letterSpacing: 6,
+            textTransform: "uppercase",
+            marginBottom: 8,
+          }}
+        >
+          ﴾ {verse.verse_key} ﴿
+        </div>
+      )}
 
       {/* Texte arabe avec karaoké */}
       <KaraokeText

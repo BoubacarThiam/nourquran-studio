@@ -29,6 +29,7 @@
     "@remotion/renderer": "^4.0.474",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.40.0",
     "lucide-react": "^1.17.0",
     "next": "14.2.35",
     "prisma": "^5.22.0",

@@ -100,8 +100,13 @@ export function mergeTimings(
         ...verse.words.filter((w) => isVerseMarker(w.text_uthmani)),
       ];
     } else {
-      // Aucun timing disponible → timestamps à zéro (le Player ignorera le karaoké)
-      words = verse.words;
+      // Aucun timing disponible → estimation par nombre de mots (~420ms/mot murattal)
+      const realWords = verse.words.filter((w) => !isVerseMarker(w.text_uthmani));
+      const estimatedMs = Math.max(2500, realWords.length * 420);
+      words = [
+        ...distributeTimings(realWords, 0, estimatedMs),
+        ...verse.words.filter((w) => isVerseMarker(w.text_uthmani)),
+      ];
     }
 
     // URL audio : chapitre complet si disponible, sinon verset individuel (everyayah)
@@ -111,14 +116,17 @@ export function mergeTimings(
         ? buildVerseAudioUrl(reciter.everyayahId, chapterId, verse.verse_number)
         : "");
 
+    const realWords2 = verse.words.filter((w) => !isVerseMarker(w.text_uthmani));
+    const estimatedMs = Math.max(2500, realWords2.length * 420);
+
     return {
       ...verse,
       words,
       audio_url,
       // Métadonnées timing injectées pour la composition Remotion
       _timestampFrom: vt?.timestamp_from ?? 0,
-      _timestampTo:   vt?.timestamp_to ?? 0,
-      _durationMs:    vt?.duration ?? 5000,
+      _timestampTo:   vt?.timestamp_to   ?? 0,
+      _durationMs:    vt?.duration        ?? estimatedMs,
       _chapterAudio:  !!chapterAudio,
     } as Verse;
   });

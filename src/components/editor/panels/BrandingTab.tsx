@@ -5,6 +5,8 @@ import { Upload, Volume2, CheckCircle2 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { SectionLabel } from "./SectionLabel";
+import { ToggleSwitch } from "./ToggleSwitch";
 
 const WATERMARK_POSITIONS = [
   { id: "top-left",     label: "↖" },
@@ -46,7 +48,7 @@ export function BrandingTab() {
         <div className="flex items-center justify-between">
           <div>
             <SectionLabel>Filigrane (logo)</SectionLabel>
-            <p className="text-[11px] text-muted-foreground/50 mt-0.5">Votre logo sur la vidéo</p>
+            <p className="text-[11px] text-muted-foreground/80 mt-0.5">Votre logo sur la vidéo</p>
           </div>
           <ToggleSwitch
             checked={config.watermark?.enabled ?? false}
@@ -72,7 +74,7 @@ export function BrandingTab() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={config.watermark.url} alt="Logo" className="w-full h-full object-contain p-1.5" />
                 ) : (
-                  <Upload className="w-5 h-5 text-muted-foreground/50" />
+                  <Upload className="w-5 h-5 text-muted-foreground/70" />
                 )}
               </button>
               <div className="flex-1 space-y-1.5">
@@ -82,7 +84,7 @@ export function BrandingTab() {
                 >
                   {config.watermark?.url ? "Changer le logo" : "Choisir PNG / SVG"}
                 </button>
-                <p className="text-[10px] text-muted-foreground/40 px-1">PNG avec transparence recommandé</p>
+                <p className="text-[10px] text-muted-foreground/70 px-1">PNG avec transparence recommandé</p>
               </div>
             </div>
 
@@ -137,7 +139,7 @@ export function BrandingTab() {
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/4 transition-colors duration-200">
             <div>
               <p className="text-sm text-foreground/80">Intro</p>
-              <p className="text-[11px] text-muted-foreground/50">Écran titre avec nom de la sourate</p>
+              <p className="text-[11px] text-muted-foreground/80">Écran titre avec nom de la sourate</p>
             </div>
             <ToggleSwitch
               checked={config.intro?.enabled ?? false}
@@ -161,7 +163,7 @@ export function BrandingTab() {
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/4 transition-colors duration-200">
             <div>
               <p className="text-sm text-foreground/80">Outro</p>
-              <p className="text-[11px] text-muted-foreground/50">Écran de fin avec appel à l&apos;action</p>
+              <p className="text-[11px] text-muted-foreground/80">Écran de fin avec appel à l&apos;action</p>
             </div>
             <ToggleSwitch
               checked={config.outro?.enabled ?? false}
@@ -198,7 +200,7 @@ export function BrandingTab() {
         <div className="flex items-center justify-between">
           <div>
             <SectionLabel>Son ambiant</SectionLabel>
-            <p className="text-[11px] text-muted-foreground/50 mt-0.5">Fond sonore discret sous la récitation</p>
+            <p className="text-[11px] text-muted-foreground/80 mt-0.5">Fond sonore discret sous la récitation</p>
           </div>
           <ToggleSwitch
             checked={config.ambientSound?.enabled ?? false}
@@ -268,32 +270,6 @@ export function BrandingTab() {
 
 /* ── Composants utilitaires ──────────────────────────────────────────────── */
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-0.5">
-      {children}
-    </p>
-  );
-}
-
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative flex-shrink-0 rounded-full transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold/40",
-        checked ? "bg-gold" : "bg-studio-surface border border-studio-border"
-      )}
-      style={{ width: 36, height: 20, boxShadow: checked ? "0 0 10px hsl(var(--gold)/0.3)" : "none" }}
-    >
-      <div className={cn(
-        "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-200",
-        checked ? "translate-x-[17px]" : "translate-x-0.5"
-      )} />
-    </button>
-  );
-}
-
 function StudioSlider({
   min, max, step = 1, value, onChange, label, unit = "",
 }: {
@@ -304,15 +280,16 @@ function StudioSlider({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground/70">{label}</span>
+        <span className="text-xs text-muted-foreground/80">{label}</span>
         <span className="text-xs font-mono text-gold tabular-nums">{value}{unit}</span>
       </div>
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-gold h-1 rounded-full cursor-pointer focus:outline-none"
+        aria-label={label}
+        className="w-full accent-gold h-1 rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
       />
-      <div className="flex justify-between text-muted-foreground/40 text-[10px]">
+      <div className="flex justify-between text-muted-foreground/70 text-[10px]">
         <span>{min}{unit}</span><span>{max}{unit}</span>
       </div>
     </div>

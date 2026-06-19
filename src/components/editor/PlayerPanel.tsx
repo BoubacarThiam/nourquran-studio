@@ -7,7 +7,6 @@ import { useEditorStore } from "@/store/editorStore";
 import { QuranVideoComposition } from "@remotion/compositions/QuranVideoComposition";
 import type { QuranCompositionProps, RenderVerse } from "@/types/remotion";
 import { RECITERS } from "@/lib/quran/reciters";
-import { cn } from "@/lib/utils";
 import type { AspectRatio } from "@/types/quran";
 
 const ASPECT_RATIOS: Record<AspectRatio, { width: number; height: number }> = {
@@ -42,15 +41,17 @@ export function PlayerPanel() {
       : "",
     reciterName:     reciter?.name ?? "",
     totalDurationMs,
+    showBismillah:   loadedChapter?.showBismillah ?? false,
   }), [config, loadedChapter, reciter, totalDurationMs]);
 
-  const isPortrait = config.aspectRatio === "9:16";
+  // Formats "hauts" (9:16, 4:5…) : la hauteur disponible pilote la taille,
+  // la largeur en découle. Formats "larges" : l'inverse. Dans les deux cas
+  // un plafond sur l'autre axe évite tout dépassement du conteneur parent
+  // (essentiel sur mobile où la zone du player est basse et large).
+  const isTallFormat = displayRatio < 1;
 
   return (
-    <div className={cn(
-      "relative flex items-center justify-center w-full h-full",
-      isPortrait ? "max-w-[340px] mx-auto" : "max-w-full"
-    )}>
+    <div className="relative flex items-center justify-center w-full h-full max-w-full">
 
       {/* Halo doré autour du player */}
       <div
@@ -62,8 +63,14 @@ export function PlayerPanel() {
 
       {/* Conteneur player */}
       <div
-        className="relative w-full rounded-2xl overflow-hidden"
-        style={{ aspectRatio: String(displayRatio) }}
+        className="relative rounded-2xl overflow-hidden"
+        style={{
+          aspectRatio: String(displayRatio),
+          width:    isTallFormat ? "auto" : "100%",
+          height:   isTallFormat ? "100%" : "auto",
+          maxWidth: "100%",
+          maxHeight: "100%",
+        }}
       >
         {/* Player Remotion */}
         <Player
@@ -114,7 +121,7 @@ export function PlayerPanel() {
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3"
             style={{ background: "hsl(var(--studio-bg))" }}>
             <div className="text-5xl opacity-20 font-arabic">بسم الله</div>
-            <p className="text-sm text-muted-foreground/50">Sélectionnez une sourate dans le panneau</p>
+            <p className="text-sm text-muted-foreground/80">Sélectionnez une sourate dans le panneau</p>
           </div>
         )}
 
@@ -127,7 +134,7 @@ export function PlayerPanel() {
             }}>
             <p className="text-[10px] text-gold/60 text-center font-mono tracking-wider">
               {loadedChapter.surah.name_arabic}
-              {" · "}{loadedChapter.verses.length}v
+              {" · "}{loadedChapter.verseCount}v
               {" · "}{Math.round(totalDurationMs / 1000)}s
               {" · "}{config.aspectRatio}
             </p>

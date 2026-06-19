@@ -47,6 +47,7 @@ const defaultProps: QuranCompositionProps = {
   surahName:       "Al-Fatihah",
   reciterName:     "Yasser Al-Dosari",
   totalDurationMs: 47000,
+  showBismillah:   false,
 };
 
 export const Root: React.FC = () => (

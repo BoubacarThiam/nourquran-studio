@@ -5,6 +5,7 @@ import { useEditorStore } from "@/store/editorStore";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { ArabicFont } from "@/types/quran";
+import { SectionLabel } from "./SectionLabel";
 
 const FONTS: { id: ArabicFont; label: string; fontClass: string; sample: string }[] = [
   { id: "uthmanic",     label: "Noto Naskh Arabic",  fontClass: "font-arabic",       sample: "بِسْمِ ٱللَّهِ" },
@@ -190,14 +191,6 @@ export function TextTab() {
 
 /* ── Composants utilitaires ──────────────────────────────────────────────── */
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-0.5">
-      {children}
-    </p>
-  );
-}
-
 function StudioSlider({
   min, max, step = 1, value, onChange, label, unit = "",
 }: {
@@ -208,15 +201,16 @@ function StudioSlider({
   return (
     <div className="space-y-1.5 pt-1">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground/60">{label}</span>
+        <span className="text-xs text-muted-foreground/80">{label}</span>
         <span className="text-xs font-mono text-gold tabular-nums">{value}{unit}</span>
       </div>
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-gold h-1 rounded-full cursor-pointer focus:outline-none"
+        aria-label={label}
+        className="w-full accent-gold h-1 rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
       />
-      <div className="flex justify-between text-muted-foreground/40 text-[10px]">
+      <div className="flex justify-between text-muted-foreground/70 text-[10px]">
         <span>{min}{unit}</span><span>{max}{unit}</span>
       </div>
     </div>
@@ -234,7 +228,13 @@ function ColorRow({
   return (
     <div className="flex items-center gap-3">
       <label className="cursor-pointer flex-shrink-0">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="sr-only" />
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label="Couleur personnalisée"
+          className="sr-only"
+        />
         <div
           className="w-10 h-10 rounded-xl border-2 border-studio-border hover:border-gold/50 transition-colors duration-200 shadow-sm cursor-pointer"
           style={{ background: value }}
@@ -248,6 +248,8 @@ function ColorRow({
               key={c}
               onClick={() => onChange(c)}
               style={{ background: c }}
+              aria-label={`Couleur ${c}`}
+              aria-pressed={sel}
               className={cn(
                 "w-8 h-8 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:scale-110 focus:outline-none focus:ring-2",
                 sel

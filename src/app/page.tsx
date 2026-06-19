@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import ShaderBackground from "@/components/ui/shader-background";
 import { ArrowRight, Play, Film, Mic2, Subtitles, MonitorPlay, Zap, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +45,10 @@ const FEATURES = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen flex flex-col" style={{ background: "hsl(var(--studio-bg))" }}>
+    <main className="relative min-h-screen flex flex-col">
+
+      {/* Fond shader plein écran (grille + lignes dorées animées) */}
+      <ShaderBackground />
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3.5 border-b border-studio-border"
@@ -89,12 +93,6 @@ export default function HomePage() {
         <div className="absolute inset-0 pointer-events-none"
           style={{
             background: "radial-gradient(ellipse 80% 60% at 50% 0%, hsl(var(--gold)/0.07) 0%, transparent 70%)",
-          }} />
-        {/* Grille subtile */}
-        <div className="absolute inset-0 opacity-[0.025] pointer-events-none"
-          style={{
-            backgroundImage: "linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)",
-            backgroundSize: "60px 60px",
           }} />
 
         {/* Badge catégorie */}
@@ -152,7 +150,7 @@ export default function HomePage() {
 
       {/* ── Features ───────────────────────────────────────────────────── */}
       <section className="px-6 pb-20 max-w-5xl mx-auto w-full">
-        <p className="text-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/40 mb-8">
+        <p className="text-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/80 mb-8">
           Tout ce qu&apos;il vous faut
         </p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

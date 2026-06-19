@@ -1,117 +1,313 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { Download, X, Loader2, CheckCircle2, AlertTriangle, Film, Clock } from "lucide-react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import {
+  Download, X, Loader2, CheckCircle2, AlertTriangle,
+  Film, Video,
+} from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { RECITERS } from "@/lib/quran/reciters";
 import type { QuranCompositionProps, RenderVerse } from "@/types/remotion";
+import {
+  getCompositionDimensions,
+  renderCompositionFrame,
+  renderBismillahFrame,
+} from "@/lib/render/browserRenderer";
+import { BISMILLAH_DURATION_MS } from "@/lib/quran/bismillah";
 
 interface Props {
   onClose: () => void;
 }
 
-type Phase = "confirm" | "rendering" | "done" | "failed";
+type Phase = "confirm" | "recording" | "done" | "failed";
 
 export function ExportModal({ onClose }: Props) {
   const config        = useEditorStore((s) => s.config);
   const loadedChapter = useEditorStore((s) => s.loadedChapter);
   const reciter       = RECITERS.find((r) => r.id === config.reciterId);
 
-  const [phase,       setPhase]       = useState<Phase>("confirm");
-  const [progress,    setProgress]    = useState(0);
-  const [statusText,  setStatusText]  = useState("");
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [filename,    setFilename]    = useState("video.mp4");
-  const [error,       setError]       = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [phase,      setPhase]      = useState<Phase>("confirm");
+  const [progress,   setProgress]   = useState(0);
+  const [statusText, setStatusText] = useState("");
+  const [blob,       setBlob]       = useState<Blob | null>(null);
+  const [filename,   setFilename]   = useState("video.webm");
+  const [error,      setError]      = useState<string | null>(null);
+  // Pending start — true quand l'utilisateur a cliqué mais le canvas n'est pas encore monté
+  const [pendingStart, setPendingStart] = useState(false);
 
-  const durationSec   = Math.round((loadedChapter?.totalDurationMs ?? 0) / 1000);
-  const verseCount    = loadedChapter?.verses.length ?? 0;
-  const renderEnabled = process.env.NEXT_PUBLIC_RENDER_ENABLED !== "false";
+  const canvasRef   = useRef<HTMLCanvasElement | null>(null);
+  const rafRef      = useRef<number | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioRef    = useRef<HTMLAudioElement | null>(null);
+  const bgVideoRef  = useRef<HTMLVideoElement | null>(null);
+  const bgImgRef    = useRef<HTMLImageElement | null>(null);
 
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  const durationSec = Math.round((loadedChapter?.totalDurationMs ?? 0) / 1000);
+  const verseCount  = loadedChapter?.verseCount ?? 0;
 
-  async function startRender() {
+  // Nettoyage à la fermeture
+  useEffect(() => () => stopAll(), []);
+
+  // Échap pour fermer — désactivé pendant l'enregistrement actif pour éviter une perte accidentelle
+  useEffect(() => {
+    if (phase === "recording") return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phase, onClose]);
+
+  function stopAll() {
+    if (rafRef.current)      cancelAnimationFrame(rafRef.current);
+    if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
+    if (audioRef.current)    { audioRef.current.pause(); audioRef.current.src = ""; }
+    if (bgVideoRef.current)  { bgVideoRef.current.pause(); bgVideoRef.current.src = ""; }
+  }
+
+  // Déclenché par le bouton : met à jour la phase pour monter le canvas, puis attend useEffect
+  function requestRecording() {
     if (!loadedChapter) return;
-    setPhase("rendering");
+    setPhase("recording");
     setProgress(0);
-    setStatusText("Démarrage…");
+    setStatusText("Chargement des ressources…");
+    setPendingStart(true);
+  }
 
-    try {
-      const inputProps: QuranCompositionProps = {
-        ...config,
-        verses:          loadedChapter.verses as RenderVerse[],
-        chapterAudioUrl: loadedChapter.chapterAudioUrl ?? null,
-        surahName:       `${loadedChapter.surah.name_arabic} — ${loadedChapter.surah.name_french}`,
-        reciterName:     reciter?.name ?? "",
-        totalDurationMs: loadedChapter.totalDurationMs ?? 0,
-      };
+  // Démarre l'enregistrement une fois que le canvas est monté dans le DOM
+  useEffect(() => {
+    if (!pendingStart || !canvasRef.current) return;
+    setPendingStart(false);
+    doStartRecording();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingStart, phase]);
 
-      const res = await fetch("/api/render", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(inputProps),
+  const doStartRecording = useCallback(async () => {
+    if (!loadedChapter || !canvasRef.current) return;
+
+    const inputProps: QuranCompositionProps = {
+      ...config,
+      verses:          loadedChapter.verses as RenderVerse[],
+      chapterAudioUrl: loadedChapter.chapterAudioUrl ?? null,
+      surahName:       `${loadedChapter.surah.name_arabic} — ${loadedChapter.surah.name_french}`,
+      reciterName:     reciter?.name ?? "",
+      totalDurationMs: loadedChapter.totalDurationMs,
+      showBismillah:   loadedChapter.showBismillah,
+    };
+
+    const { width, height, scale } = getCompositionDimensions(config.aspectRatio, config.resolution);
+    const canvas = canvasRef.current;
+    canvas.width  = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+
+    // Force le chargement des polices arabes dans le contexte canvas.
+    // document.fonts.ready ne suffit pas : les polices Google sont chargées
+    // à la demande et peuvent ne pas être disponibles pour le canvas
+    // avant un appel explicite à document.fonts.load().
+    setStatusText("Chargement des polices…");
+    const fs = `${Math.round(config.arabicFontSize * scale)}px`;
+    await Promise.allSettled([
+      document.fonts.load(`${fs} "Noto Naskh Arabic"`),
+      document.fonts.load(`${fs} "Amiri"`),
+      document.fonts.load(`${fs} "Scheherazade New"`),
+      document.fonts.ready,
+    ]);
+
+    // Timestamps de la plage sélectionnée
+    const verses       = inputProps.verses;
+    const rangeOffsetMs = verses.length > 0 ? (verses[0]._timestampFrom ?? 0) : 0;
+    const totalMs      = loadedChapter.totalDurationMs;
+    const totalFrames  = Math.ceil(totalMs / 1000 * 30);
+
+    // ── Fond vidéo ─────────────────────────────────────────────────
+    const bg = config.background;
+    let bgVideoEl: HTMLVideoElement | null = null;
+    let bgImgEl:   HTMLImageElement | null = null;
+
+    if ((bg.type === "pexels_video" || bg.type === "upload") && bg.url) {
+      setStatusText("Chargement de la vidéo de fond…");
+      const vid = document.createElement("video");
+      vid.src      = bg.url;
+      vid.muted    = true;
+      vid.loop     = true;
+      vid.crossOrigin = "anonymous";
+      vid.preload  = "auto";
+      bgVideoEl    = vid;
+      bgVideoRef.current = vid;
+      await new Promise<void>((res) => {
+        vid.oncanplay  = () => res();
+        vid.onerror    = () => res(); // fallback si CORS échoue
+        vid.load();
+      });
+    } else if (bg.type === "pexels_image" && bg.url) {
+      setStatusText("Chargement de l'image de fond…");
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      bgImgEl = img;
+      bgImgRef.current = img;
+      await new Promise<void>((res) => {
+        img.onload  = () => res();
+        img.onerror = () => res();
+        img.src = bg.url!;
+      });
+    }
+
+    // ── Audio chapitre ─────────────────────────────────────────────
+    const audioEl = new Audio();
+    audioEl.crossOrigin = "anonymous";
+    audioRef.current    = audioEl;
+
+    let audioCtx:  AudioContext | null = null;
+    let audioTrack: MediaStreamTrack | null = null;
+
+    if (inputProps.chapterAudioUrl) {
+      setStatusText("Chargement de l'audio…");
+      audioEl.src = inputProps.chapterAudioUrl;
+      audioEl.preload = "auto";
+      await new Promise<void>((res) => {
+        audioEl.oncanplay  = () => res();
+        audioEl.onerror    = () => res();
+        audioEl.load();
+      });
+      audioEl.currentTime = rangeOffsetMs / 1000;
+
+      try {
+        audioCtx = new AudioContext();
+        const src  = audioCtx.createMediaElementSource(audioEl);
+        const dest = audioCtx.createMediaStreamDestination();
+        src.connect(dest);
+        src.connect(audioCtx.destination); // écoute locale pendant l'enregistrement
+        audioTrack = dest.stream.getAudioTracks()[0] ?? null;
+      } catch {
+        // Pas d'audio Web API : on continue sans audio dans le fichier
+      }
+    }
+
+    // ── MediaRecorder ──────────────────────────────────────────────
+    const canvasStream = canvas.captureStream(30);
+    if (audioTrack) canvasStream.addTrack(audioTrack);
+
+    const mimeType =
+      MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus") ? "video/webm;codecs=vp9,opus" :
+      MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus") ? "video/webm;codecs=vp8,opus" :
+      MediaRecorder.isTypeSupported("video/webm")                 ? "video/webm" :
+      "video/mp4";
+
+    const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 5_000_000 });
+    recorderRef.current = recorder;
+
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = () => {
+      const outputBlob = new Blob(chunks, { type: mimeType.split(";")[0] });
+      const ext  = mimeType.includes("mp4") ? "mp4" : "webm";
+      setBlob(outputBlob);
+      setFilename(`NourQuran_${loadedChapter.surah.name_simple}_${config.aspectRatio.replace(":", "x")}.${ext}`);
+      setPhase("done");
+    };
+
+    recorder.start(500); // un chunk toutes les 500ms
+    setStatusText("Enregistrement en cours…");
+
+    // Démarre la vidéo de fond tout de suite (visible dès le préroulé basmala).
+    // L'audio démarre seulement après ce préroulé — voir tick().
+    bgVideoEl?.play().catch(() => {});
+
+    // ── Boucle de rendu ────────────────────────────────────────────
+    // Référence temporelle : audio si disponible, sinon horloge murale
+    const wallStart   = performance.now();
+    const hasAudio    = !!inputProps.chapterAudioUrl && audioEl.src;
+    const bismillahMs = inputProps.showBismillah ? BISMILLAH_DURATION_MS : 0;
+    let audioStarted  = false;
+
+    function tick() {
+      if (!canvas) return;
+
+      const wallElapsed = performance.now() - wallStart;
+
+      // ── Phase basmala : préroulé silencieux, l'audio reste en pause ──
+      if (wallElapsed < bismillahMs) {
+        const pct = Math.min(Math.round(wallElapsed / totalMs * 100), 99);
+        setProgress(pct);
+        setStatusText(`Enregistrement… ${pct}%`);
+        renderBismillahFrame({
+          ctx, width, height, scale, props: inputProps,
+          bgVideoEl, bgImgEl,
+          frame: Math.round(wallElapsed / 1000 * 30), totalFrames,
+          progressMs: wallElapsed, durationMs: bismillahMs,
+        });
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      if (!audioStarted) {
+        audioStarted = true;
+        audioEl.play().catch(() => {});
+        if (audioCtx?.state === "suspended") audioCtx.resume();
+      }
+
+      const audioElapsed = hasAudio
+        ? (audioEl.currentTime * 1000) - rangeOffsetMs
+        : wallElapsed - bismillahMs;
+
+      const elapsedMs       = Math.max(0, audioElapsed);
+      const absoluteMs      = rangeOffsetMs + elapsedMs;
+      const frame            = Math.round(elapsedMs / 1000 * 30);
+      const globalElapsedMs = bismillahMs + elapsedMs;
+      const pct              = Math.min(Math.round(globalElapsedMs / totalMs * 100), 99);
+
+      setProgress(pct);
+      if (pct > 0) setStatusText(`Enregistrement… ${pct}%`);
+
+      renderCompositionFrame({
+        ctx, width, height, scale, absoluteMs, props: inputProps,
+        bgVideoEl, bgImgEl, frame, totalFrames,
       });
 
-      const { jobId, error: startErr } = await res.json();
-      if (startErr || !jobId) throw new Error(startErr ?? "Impossible de démarrer le rendu");
+      // Fin de l'enregistrement
+      if (globalElapsedMs >= totalMs || (hasAudio && audioEl.ended)) {
+        cancelAnimationFrame(rafRef.current!);
+        setProgress(100);
+        setStatusText("Finalisation…");
+        recorder.stop();
+        audioEl.pause();
+        bgVideoEl?.pause();
+        return;
+      }
 
-      // Polling toutes les 2 secondes
-      pollRef.current = setInterval(async () => {
-        try {
-          const poll = await fetch(`/api/render/${jobId}`);
-          const data = await poll.json();
-
-          if (data.status === "downloading") {
-            setStatusText("Téléchargement de la vidéo de fond…");
-            setProgress(data.progress);
-          } else if (data.status === "bundling") {
-            setStatusText("Compilation des assets…");
-            setProgress(data.progress);
-          } else if (data.status === "rendering") {
-            setStatusText(`Rendu en cours… ${data.progress}%`);
-            setProgress(data.progress);
-          } else if (data.status === "done") {
-            clearInterval(pollRef.current!);
-            setProgress(100);
-            setStatusText("Rendu terminé !");
-            setDownloadUrl(data.downloadUrl);
-            setFilename(`NourQuran_${loadedChapter.surah.name_simple}_${config.aspectRatio.replace(":", "x")}.mp4`);
-            setPhase("done");
-          } else if (data.status === "failed") {
-            clearInterval(pollRef.current!);
-            throw new Error(data.error ?? "Le rendu a échoué");
-          }
-        } catch (pollErr) {
-          clearInterval(pollRef.current!);
-          setError((pollErr as Error).message);
-          setPhase("failed");
-        }
-      }, 2000);
-
-    } catch (err) {
-      setError((err as Error).message);
-      setPhase("failed");
+      rafRef.current = requestAnimationFrame(tick);
     }
-  }
+
+    rafRef.current = requestAnimationFrame(tick);
+  }, [config, loadedChapter, reciter]); // doStartRecording
 
   function triggerDownload() {
-    if (!downloadUrl) return;
-    const a = document.createElement("a");
-    a.href     = downloadUrl;
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement("a");
+    a.href     = url;
     a.download = filename;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
-  return (
-    // Fond semi-transparent
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget && phase !== "rendering") onClose(); }}
-    >
-      <div className="w-full max-w-md rounded-2xl border border-studio-border overflow-hidden shadow-2xl"
-        style={{ background: "hsl(var(--studio-panel))" }}>
+  // Calcule les dimensions d'affichage du canvas preview (max 200px de large)
+  const dims = getCompositionDimensions(config.aspectRatio, config.resolution);
+  const previewW = 180;
+  const previewH = Math.round(previewW * dims.height / dims.width);
 
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget && phase !== "recording") onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-modal-title"
+        className="w-full max-w-md rounded-2xl border border-studio-border overflow-hidden shadow-2xl"
+        style={{ background: "hsl(var(--studio-panel))" }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-studio-border">
           <div className="flex items-center gap-2.5">
@@ -119,13 +315,16 @@ export function ExportModal({ onClose }: Props) {
               <Film className="w-4 h-4 text-gold" />
             </div>
             <div>
-              <p className="font-semibold text-sm">Exporter en MP4</p>
+              <p id="export-modal-title" className="font-semibold text-sm">Exporter en vidéo</p>
               <p className="text-[11px] text-muted-foreground/60">{config.aspectRatio} · {config.resolution}</p>
             </div>
           </div>
-          {phase !== "rendering" && (
-            <button onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-white/8 text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring/50">
+          {phase !== "recording" && (
+            <button
+              onClick={onClose}
+              aria-label="Fermer"
+              className="min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-white/8 text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-gold/40 focus:outline-none -mr-1.5"
+            >
               <X className="w-4 h-4" />
             </button>
           )}
@@ -134,106 +333,102 @@ export function ExportModal({ onClose }: Props) {
         {/* Body */}
         <div className="px-6 py-5 space-y-5">
 
-          {/* ── Confirmation ── */}
+          {/* ── Confirmation ────────────────────────────────────── */}
           {phase === "confirm" && (
             <>
-              {/* Résumé vidéo */}
               <div className="rounded-xl border border-studio-border bg-studio-surface p-4 space-y-2.5">
-                <InfoRow label="Sourate"     value={loadedChapter?.surah.name_french ?? "—"} />
-                <InfoRow label="Versets"     value={`${config.fromVerse} → ${config.toVerse} (${verseCount} versets)`} />
-                <InfoRow label="Récitateur"  value={reciter?.name ?? "—"} />
-                <InfoRow label="Durée"       value={`~${durationSec}s`} />
-                <InfoRow label="Format"      value={`${config.aspectRatio} · ${config.resolution}`} />
+                <InfoRow label="Sourate"    value={loadedChapter?.surah.name_french ?? "—"} />
+                <InfoRow label="Versets"    value={`${config.fromVerse} → ${config.toVerse} (${verseCount} versets)`} />
+                <InfoRow label="Récitateur" value={reciter?.name ?? "—"} />
+                <InfoRow label="Durée"      value={`~${durationSec}s`} />
+                <InfoRow label="Format"     value={`${config.aspectRatio} · ${config.resolution}`} />
               </div>
 
-              {renderEnabled ? (
-                <>
-                  <p className="text-xs text-muted-foreground/60 text-center">
-                    Le rendu prend environ {Math.ceil(durationSec / 10)}–{Math.ceil(durationSec / 5)} minutes selon votre machine.
-                  </p>
+              <p className="text-xs text-muted-foreground/60 text-center">
+                La vidéo est enregistrée directement dans votre navigateur en temps réel.
+                Durée estimée : ~{durationSec}s. Le fichier est téléchargé automatiquement.
+              </p>
 
-                  <button
-                    onClick={startRender}
-                    disabled={!loadedChapter}
-                    className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold/40 disabled:opacity-50"
-                    style={{
-                      background: "linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(43 80% 60%) 100%)",
-                      color:      "hsl(var(--studio-bg))",
-                      boxShadow:  "0 4px 20px hsl(var(--gold)/0.3)",
-                    }}
-                  >
-                    <Film className="w-4 h-4" />
-                    Lancer le rendu
-                  </button>
-                </>
-              ) : (
-                <div className="space-y-3 text-center py-2">
-                  <div className="flex flex-col items-center gap-2">
-                    <Clock className="w-10 h-10 text-gold/70" />
-                    <p className="font-semibold text-sm">Export vidéo bientôt disponible</p>
-                    <p className="text-xs text-muted-foreground/60 max-w-xs mx-auto">
-                      Le rendu vidéo serveur n&apos;est pas encore activé sur ce déploiement.
-                    </p>
-                  </div>
-                  <button
-                    onClick={onClose}
-                    className="w-full py-2.5 rounded-xl border border-studio-border text-sm hover:border-gold/30 transition-colors cursor-pointer"
-                  >
-                    Fermer
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={requestRecording}
+                disabled={!loadedChapter}
+                className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 disabled:opacity-50"
+                style={{
+                  background: "linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(43 80% 60%) 100%)",
+                  color:      "hsl(var(--studio-bg))",
+                  boxShadow:  "0 4px 20px hsl(var(--gold)/0.3)",
+                }}
+              >
+                <Video className="w-4 h-4" />
+                Enregistrer la vidéo
+              </button>
             </>
           )}
 
-          {/* ── Rendu en cours ── */}
-          {phase === "rendering" && (
-            <div className="space-y-5 py-2">
-              <div className="flex flex-col items-center gap-3">
-                <div className="relative">
-                  <Loader2 className="w-10 h-10 text-gold animate-spin" />
-                  <div className="absolute inset-0 rounded-full animate-ping opacity-20"
-                    style={{ background: "hsl(var(--gold))" }} />
-                </div>
-                <p className="text-sm font-medium">{statusText}</p>
-              </div>
-
-              {/* Barre de progression */}
-              <div className="space-y-1.5">
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: "hsl(var(--studio-surface))" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width:      `${progress}%`,
-                      background: "linear-gradient(90deg, hsl(var(--gold)) 0%, hsl(43 80% 70%) 100%)",
-                      boxShadow:  "0 0 8px hsl(var(--gold)/0.5)",
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground/50">
-                  <span>Rendu Remotion + FFmpeg</span>
-                  <span className="font-mono text-gold">{progress}%</span>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-muted-foreground/50 text-center">
-                Ne fermez pas cette fenêtre pendant le rendu.
-              </p>
+          {/* ── Canvas toujours monté (caché hors enregistrement) ── */}
+          <div style={{ display: phase === "recording" ? "block" : "none" }} className="space-y-4">
+            <div className="flex justify-center">
+              <canvas
+                ref={canvasRef}
+                style={{
+                  width:        previewW,
+                  height:       previewH,
+                  borderRadius: 8,
+                  border:       "1px solid rgba(255,255,255,0.12)",
+                  background:   "#000",
+                }}
+              />
             </div>
-          )}
 
-          {/* ── Terminé ── */}
+            <div className="flex flex-col items-center gap-1.5">
+              <Loader2 className="w-5 h-5 text-gold animate-spin" />
+              <p className="text-sm font-medium">{statusText}</p>
+            </div>
+
+            {/* Barre de progression */}
+            <div className="space-y-1.5">
+              <div
+                role="progressbar"
+                aria-valuenow={progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Progression de l'enregistrement"
+                className="h-2 rounded-full overflow-hidden" style={{ background: "hsl(var(--studio-surface))" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width:     `${progress}%`,
+                    background:"linear-gradient(90deg, hsl(var(--gold)) 0%, hsl(43 80% 70%) 100%)",
+                    boxShadow: "0 0 8px hsl(var(--gold)/0.5)",
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground/70">
+                <span>Rendu navigateur (WebM)</span>
+                <span className="font-mono text-gold">{progress}%</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground/80 text-center">
+              Ne fermez pas cette fenêtre pendant l&apos;enregistrement.
+            </p>
+          </div>
+
+          {/* ── Terminé ─────────────────────────────────────────── */}
           {phase === "done" && (
             <div className="space-y-5 py-2 text-center">
               <div className="flex flex-col items-center gap-2">
-                <CheckCircle2 className="w-12 h-12 text-emerald" style={{ filter: "drop-shadow(0 0 12px hsl(var(--emerald)/0.5))" }} />
+                <CheckCircle2
+                  className="w-12 h-12 text-emerald"
+                  style={{ filter: "drop-shadow(0 0 12px hsl(var(--emerald)/0.5))" }}
+                />
                 <p className="font-semibold">Vidéo prête !</p>
                 <p className="text-xs text-muted-foreground/60">{filename}</p>
               </div>
 
               <button
                 onClick={triggerDownload}
-                className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald/40"
+                className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-200"
                 style={{
                   background: "linear-gradient(135deg, hsl(var(--emerald)) 0%, hsl(160 70% 55%) 100%)",
                   color:      "white",
@@ -241,7 +436,7 @@ export function ExportModal({ onClose }: Props) {
                 }}
               >
                 <Download className="w-4 h-4" />
-                Télécharger la vidéo MP4
+                Télécharger la vidéo
               </button>
 
               <button
@@ -253,12 +448,12 @@ export function ExportModal({ onClose }: Props) {
             </div>
           )}
 
-          {/* ── Erreur ── */}
+          {/* ── Erreur ──────────────────────────────────────────── */}
           {phase === "failed" && (
             <div className="space-y-5 py-2 text-center">
               <div className="flex flex-col items-center gap-2">
                 <AlertTriangle className="w-10 h-10 text-destructive" />
-                <p className="font-semibold text-destructive">Le rendu a échoué</p>
+                <p className="font-semibold text-destructive">L&apos;enregistrement a échoué</p>
                 {error && (
                   <p className="text-xs text-muted-foreground/70 bg-destructive/10 rounded-xl px-4 py-2 max-w-full break-words">
                     {error}

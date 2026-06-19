@@ -10,6 +10,8 @@ import { Background } from "../components/Background";
 import { VerseDisplay } from "../components/VerseDisplay";
 import { Watermark } from "../components/Watermark";
 import { IntroOutro } from "../components/IntroOutro";
+import { BismillahCard } from "../components/BismillahCard";
+import { BISMILLAH_DURATION_MS } from "@/lib/quran/bismillah";
 
 export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) => {
   const {
@@ -28,6 +30,7 @@ export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) =>
     outro,
     reciterVolume,
     ambientSound,
+    showBismillah,
   } = props;
 
   const { fps, durationInFrames } = useVideoConfig();
@@ -36,6 +39,13 @@ export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) =>
 
   const introDurationFrames = intro.enabled ? msToFrames(intro.durationSec * 1000) : 0;
   const outroDurationFrames = outro.enabled ? msToFrames(outro.durationSec * 1000) : 0;
+
+  // Préroulé silencieux de la basmala : décale uniformément les versets et le
+  // début de l'audio du chapitre, comme un mini-intro automatique. Les fichiers
+  // audio QuranCDN démarrent quasi systématiquement pile sur le verset 1, sans
+  // segment basmala réel sur lequel se caler — on l'affiche donc hors-audio.
+  const bismillahDurationFrames = showBismillah ? msToFrames(BISMILLAH_DURATION_MS) : 0;
+  const preRollFrames = introDurationFrames + bismillahDurationFrames;
 
   // Offset absolu du premier verset dans l'audio du chapitre.
   // Permet de repositionner les versets à 0 quand l'utilisateur ne sélectionne
@@ -56,17 +66,12 @@ export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) =>
       />
 
       {/* ── Audio chapitre complet ───────────────────────────────────── */}
+      {/* Décalé de preRollFrames (intro + basmala) pour que la récitation ne
+          démarre qu'une fois le préroulé silencieux terminé. */}
       {chapterAudioUrl && (
-        rangeOffsetMs > 0 ? (
-          // Seek dans l'audio en décalant la Sequence vers le passé.
-          // from={-N} fait démarrer le compteur interne à N : l'audio joue
-          // depuis le bon timestamp du chapitre dès le frame 0 de la composition.
-          <Sequence from={-msToFrames(rangeOffsetMs)}>
-            <Audio src={chapterAudioUrl} volume={reciterVolume} />
-          </Sequence>
-        ) : (
+        <Sequence from={preRollFrames - msToFrames(rangeOffsetMs)}>
           <Audio src={chapterAudioUrl} volume={reciterVolume} />
-        )
+        </Sequence>
       )}
 
       {/* ── Son ambiant ─────────────────────────────────────────────── */}
@@ -86,13 +91,20 @@ export const QuranVideoComposition: React.FC<QuranCompositionProps> = (props) =>
         </Sequence>
       )}
 
+      {/* ── Basmala (préroulé silencieux, avant le verset 1) ──────────── */}
+      {showBismillah && (
+        <Sequence from={introDurationFrames} durationInFrames={bismillahDurationFrames}>
+          <BismillahCard config={props} durationFrames={bismillahDurationFrames} />
+        </Sequence>
+      )}
+
       {/* ── Versets ─────────────────────────────────────────────────── */}
       {verses.map((verse) => {
         const renderVerse = verse as RenderVerse;
 
         const fromFrame = renderVerse._chapterAudio
-          ? Math.max(0, msToFrames(renderVerse._timestampFrom - rangeOffsetMs)) + introDurationFrames
-          : introDurationFrames + verses.slice(0, verses.indexOf(verse)).reduce(
+          ? Math.max(0, msToFrames(renderVerse._timestampFrom - rangeOffsetMs)) + preRollFrames
+          : preRollFrames + verses.slice(0, verses.indexOf(verse)).reduce(
               (acc, v) => acc + msToFrames((v as RenderVerse)._durationMs ?? 5000),
               0
             );

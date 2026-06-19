@@ -18,11 +18,15 @@ import { fetchSurah } from "./surahs";
 import { fetchVerses } from "./verses";
 import { fetchChapterAudio, mergeTimings } from "./audio";
 import { buildChapterAudioUrl } from "./reciters";
+import { shouldShowBismillah, buildBismillahVerse, BISMILLAH_DURATION_MS } from "./bismillah";
 import type { Verse, Surah } from "@/types/quran";
 
 export interface LoadedChapter {
   surah: Surah;
   verses: Verse[];
+  verseCount: number;
+  /** Préroulé silencieux de la basmala à afficher avant le verset 1 */
+  showBismillah: boolean;
   chapterAudioUrl: string | null;
   totalDurationMs: number;
 }
@@ -47,7 +51,20 @@ export async function loadChapterData(
     fetchChapterAudio(reciterId, surahId),
   ]);
 
-  const verses = mergeTimings(rawVerses, chapterAudio, reciterId, surahId);
+  let verses = mergeTimings(rawVerses, chapterAudio, reciterId, surahId);
+  const verseCount = verses.length;
+  const wantsBismillah = shouldShowBismillah(surah, options.from ?? 1);
+
+  // Avec timing QuranCDN réel : aucun segment audio de basmala n'existe dans
+  // le fichier (mesuré : le verset 1 démarre pile à 0) → préroulé silencieux
+  // séparé (voir QuranVideoComposition / browserRenderer).
+  // Sans timing réel (mp3quran.net) : l'audio continu contient réellement la
+  // basmala récitée au début → on l'insère comme un verset de plus, pour que
+  // les durées estimées de tous les versets restent cohérentes ensuite.
+  const showBismillah = wantsBismillah && !!chapterAudio;
+  if (wantsBismillah && !chapterAudio) {
+    verses = [buildBismillahVerse(surahId, options.translationIds ?? []) as Verse, ...verses];
+  }
 
   type EnrichedVerse = typeof verses[number] & {
     _timestampFrom: number;
@@ -70,7 +87,7 @@ export async function loadChapterData(
       ? last._timestampTo
       : (last._timestampFrom ?? 0) + (last._durationMs ?? 5000);
     return Math.max(end - start, 1000);
-  })();
+  })() + (showBismillah ? BISMILLAH_DURATION_MS : 0);
 
   // Pour les reciters sans QuranCDN (Luhaidan, Maher), utiliser le template mp3quran.net
   const chapterAudioUrl = chapterAudio?.audioUrl ?? buildChapterAudioUrl(reciterId, surahId);
@@ -78,6 +95,8 @@ export async function loadChapterData(
   return {
     surah,
     verses,
+    verseCount,
+    showBismillah,
     chapterAudioUrl,
     totalDurationMs,
   };

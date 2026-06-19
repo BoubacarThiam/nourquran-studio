@@ -4,6 +4,8 @@ import React from "react";
 import { useEditorStore } from "@/store/editorStore";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { SectionLabel } from "./SectionLabel";
+import { ToggleSwitch } from "./ToggleSwitch";
 
 export function EffetsTab() {
   const config    = useEditorStore((s) => s.config);
@@ -36,7 +38,7 @@ export function EffetsTab() {
         <div className="flex items-center justify-between">
           <div>
             <SectionLabel>Vignette</SectionLabel>
-            <p className="text-[11px] text-muted-foreground/50 mt-0.5">Assombrit les bords</p>
+            <p className="text-[11px] text-muted-foreground/80 mt-0.5">Assombrit les bords</p>
           </div>
           <ToggleSwitch
             checked={config.vignette ?? false}
@@ -62,7 +64,7 @@ export function EffetsTab() {
         <div className="flex items-center justify-between">
           <div>
             <SectionLabel>Animation Ken Burns</SectionLabel>
-            <p className="text-[11px] text-muted-foreground/50 mt-0.5">Zoom lent sur l&apos;image de fond</p>
+            <p className="text-[11px] text-muted-foreground/80 mt-0.5">Zoom lent sur l&apos;image de fond</p>
           </div>
           <ToggleSwitch
             checked={config.kenBurns ?? false}
@@ -138,32 +140,6 @@ export function EffetsTab() {
 
 /* ── Composants utilitaires ──────────────────────────────────────────────── */
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-0.5">
-      {children}
-    </p>
-  );
-}
-
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative flex-shrink-0 rounded-full transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold/40",
-        checked ? "bg-gold" : "bg-studio-surface border border-studio-border"
-      )}
-      style={{ width: 36, height: 20, boxShadow: checked ? "0 0 10px hsl(var(--gold)/0.3)" : "none" }}
-    >
-      <div className={cn(
-        "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-200",
-        checked ? "translate-x-[17px]" : "translate-x-0.5"
-      )} />
-    </button>
-  );
-}
-
 function StudioSlider({
   min, max, step = 1, value, onChange, label, unit = "",
 }: {
@@ -174,15 +150,16 @@ function StudioSlider({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground/70">{label}</span>
+        <span className="text-xs text-muted-foreground/80">{label}</span>
         <span className="text-xs font-mono text-gold tabular-nums">{value}{unit}</span>
       </div>
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-gold h-1 rounded-full cursor-pointer focus:outline-none"
+        aria-label={label}
+        className="w-full accent-gold h-1 rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
       />
-      <div className="flex justify-between text-muted-foreground/40 text-[10px]">
+      <div className="flex justify-between text-muted-foreground/70 text-[10px]">
         <span>{min}{unit}</span><span>{max}{unit}</span>
       </div>
     </div>

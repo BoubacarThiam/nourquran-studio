@@ -39,6 +39,12 @@ export function SettingsModal({ onClose }: Props) {
       .catch(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   async function validate(key: string) {
     const value = inputs[key]?.trim();
     if (!value) return;
@@ -105,7 +111,11 @@ export function SettingsModal({ onClose }: Props) {
       style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-lg rounded-2xl border border-studio-border overflow-hidden shadow-2xl"
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-modal-title"
+        className="w-full max-w-lg rounded-2xl border border-studio-border overflow-hidden shadow-2xl"
         style={{ background: "hsl(var(--studio-panel))" }}>
 
         {/* Header */}
@@ -115,12 +125,13 @@ export function SettingsModal({ onClose }: Props) {
               <Key className="w-4 h-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="font-semibold text-sm">Clés API</p>
+              <p id="settings-modal-title" className="font-semibold text-sm">Clés API</p>
               <p className="text-[11px] text-muted-foreground/60">Stockées localement dans votre base de données</p>
             </div>
           </div>
           <button onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-white/8 text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring/50">
+            aria-label="Fermer"
+            className="min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-white/8 text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 -mr-1.5">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -166,8 +177,9 @@ export function SettingsModal({ onClose }: Props) {
                       <button
                         onClick={() => remove(key)}
                         disabled={isBusy}
-                        className="p-1 rounded-lg hover:bg-destructive/20 text-muted-foreground/50 hover:text-destructive transition-colors cursor-pointer focus:outline-none disabled:opacity-40"
+                        className="p-1 rounded-lg hover:bg-destructive/20 text-muted-foreground/70 hover:text-destructive transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-40"
                         title="Supprimer la clé"
+                        aria-label="Supprimer la clé"
                       >
                         {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       </button>
@@ -190,7 +202,8 @@ export function SettingsModal({ onClose }: Props) {
                       />
                       <button
                         onClick={() => setShow((s) => ({ ...s, [key]: !s[key] }))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                        aria-label={show[key] ? "Masquer la clé" : "Afficher la clé"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 rounded"
                       >
                         {show[key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -248,7 +261,7 @@ export function SettingsModal({ onClose }: Props) {
           )}
 
           {/* Note sécurité */}
-          <p className="text-[10px] text-muted-foreground/40 text-center border-t border-studio-border pt-4">
+          <p className="text-[10px] text-muted-foreground/70 text-center border-t border-studio-border pt-4">
             Les clés sont stockées dans votre base SQLite locale et ne quittent jamais votre appareil.
           </p>
         </div>

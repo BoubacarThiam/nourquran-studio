@@ -8,6 +8,7 @@ import { RECITERS } from "@/lib/quran/reciters";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { AspectRatio } from "@/types/quran";
+import { SectionLabel } from "./SectionLabel";
 
 interface FormatOption {
   ratio: AspectRatio;
@@ -138,7 +139,7 @@ export function ContentTab() {
                   Chargement…
                 </div>
               )}
-              {filtered.slice(0, 50).map((s) => (
+              {filtered.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => {
@@ -153,11 +154,11 @@ export function ContentTab() {
                   )}
                 >
                   <span className="flex items-center gap-2 min-w-0">
-                    <span className="text-muted-foreground/50 w-5 text-[11px] font-mono flex-shrink-0">{s.id}</span>
+                    <span className="text-muted-foreground/70 w-5 text-[11px] font-mono flex-shrink-0">{s.id}</span>
                     <span className="font-arabic text-lg leading-none flex-shrink-0">{s.name_arabic}</span>
                     <span className="text-muted-foreground/70 text-xs truncate">{s.name_french}</span>
                   </span>
-                  <span className="text-muted-foreground/40 text-[10px] flex-shrink-0">{s.verses_count}</span>
+                  <span className="text-muted-foreground/70 text-[10px] flex-shrink-0">{s.verses_count}</span>
                 </button>
               ))}
             </div>
@@ -171,18 +172,20 @@ export function ContentTab() {
           <SectionLabel>Plage de versets</SectionLabel>
           <div className="flex items-center gap-2">
             <div className="flex-1 space-y-1">
-              <p className="text-[11px] text-muted-foreground/60 ml-1">Du verset</p>
+              <label htmlFor="from-verse" className="text-[11px] text-muted-foreground/80 ml-1 block">Du verset</label>
               <input
+                id="from-verse"
                 type="number" min={1} max={selectedSurah.verses_count}
                 value={config.fromVerse}
                 onChange={(e) => setConfig({ fromVerse: Math.min(Number(e.target.value), config.toVerse) })}
                 className={cn(inputCls, "text-center")}
               />
             </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground/40 mt-5 flex-shrink-0" />
+            <ChevronRight className="w-4 h-4 text-muted-foreground/60 mt-5 flex-shrink-0" aria-hidden="true" />
             <div className="flex-1 space-y-1">
-              <p className="text-[11px] text-muted-foreground/60 ml-1">Au verset</p>
+              <label htmlFor="to-verse" className="text-[11px] text-muted-foreground/80 ml-1 block">Au verset</label>
               <input
+                id="to-verse"
                 type="number" min={config.fromVerse} max={selectedSurah.verses_count}
                 value={config.toVerse}
                 onChange={(e) => setConfig({ toVerse: Math.max(Number(e.target.value), config.fromVerse) })}
@@ -190,7 +193,7 @@ export function ContentTab() {
               />
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground/50 text-center">
+          <p className="text-[11px] text-muted-foreground/80 text-center">
             {config.toVerse - config.fromVerse + 1} verset(s) · {selectedSurah.verses_count} au total
           </p>
         </section>
@@ -277,8 +280,10 @@ export function ContentTab() {
 
         {/* Translittération toggle */}
         <button
+          role="switch"
+          aria-checked={config.showTransliteration}
           onClick={() => setConfig({ showTransliteration: !config.showTransliteration })}
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/4 cursor-pointer transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring/50"
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/4 cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <span className="text-sm text-foreground/70">Translittération</span>
           <Toggle on={config.showTransliteration} color="emerald" />
@@ -289,14 +294,6 @@ export function ContentTab() {
 }
 
 /* ── Composants utilitaires ──────────────────────────────────────────────── */
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-0.5">
-      {children}
-    </p>
-  );
-}
 
 function Toggle({ on, color = "gold" }: { on: boolean; color?: "gold" | "emerald" }) {
   const bg = on

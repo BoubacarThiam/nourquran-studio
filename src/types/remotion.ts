@@ -15,4 +15,6 @@ export interface QuranCompositionProps extends EditorConfig {
   surahName:       string;
   reciterName:     string;
   totalDurationMs: number;
+  /** Préroulé silencieux de la basmala à afficher avant le verset 1 */
+  showBismillah:   boolean;
 }
