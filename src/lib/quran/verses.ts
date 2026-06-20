@@ -22,7 +22,7 @@ interface QuranVerse {
   verse_number: number;
   verse_key: string;
   text_uthmani: string;
-  translations: Array<{ id: number; resource_id: number; text: string }>;
+  translations?: Array<{ id: number; resource_id: number; text: string }>;
   words: QuranWord[];
 }
 
@@ -97,7 +97,7 @@ function mapVerse(v: QuranVerse): Verse {
   const cleanText = (html: string) =>
     html.replace(/<sup[^>]*>.*?<\/sup>/gi, "").trim();
 
-  const translations: Translation[] = v.translations.map((t) => ({
+  const translations: Translation[] = (v.translations ?? []).map((t) => ({
     id: t.resource_id,
     language_name: translationLanguage(t.resource_id),
     resource_name: translationAuthor(t.resource_id),

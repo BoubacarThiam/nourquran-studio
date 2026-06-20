@@ -72,9 +72,11 @@ export function mergeTimings(
   verses: Verse[],
   chapterAudio: ChapterAudioData | null,
   reciterId: number,
-  chapterId: number
+  chapterId: number,
+  calibratedWordMs?: number
 ): Verse[] {
   const reciter = getReciter(reciterId);
+  const wordMs = calibratedWordMs ?? 420;
 
   return verses.map((verse) => {
     const vt = chapterAudio?.verseTimings.get(verse.verse_key);
@@ -100,9 +102,11 @@ export function mergeTimings(
         ...verse.words.filter((w) => isVerseMarker(w.text_uthmani)),
       ];
     } else {
-      // Aucun timing disponible → estimation par nombre de mots (~420ms/mot murattal)
+      // Aucun timing disponible → estimation par nombre de mots, calibrée sur
+      // la durée RÉELLE de l'audio chapitre de ce récitateur quand on l'a
+      // (voir duration.ts) — sinon repli sur ~420ms/mot (rythme murattal moyen).
       const realWords = verse.words.filter((w) => !isVerseMarker(w.text_uthmani));
-      const estimatedMs = Math.max(2500, realWords.length * 420);
+      const estimatedMs = Math.max(2500, realWords.length * wordMs);
       words = [
         ...distributeTimings(realWords, 0, estimatedMs),
         ...verse.words.filter((w) => isVerseMarker(w.text_uthmani)),
@@ -117,7 +121,7 @@ export function mergeTimings(
         : "");
 
     const realWords2 = verse.words.filter((w) => !isVerseMarker(w.text_uthmani));
-    const estimatedMs = Math.max(2500, realWords2.length * 420);
+    const estimatedMs = Math.max(2500, realWords2.length * wordMs);
 
     return {
       ...verse,
@@ -157,6 +161,6 @@ function distributeTimings(
  * Détecte si un token Quran.com est un marqueur de fin de verset
  * (chiffres arabes-indic ٠-٩ ou signes de verset ﴾﴿).
  */
-function isVerseMarker(text: string): boolean {
+export function isVerseMarker(text: string): boolean {
   return /^[۰-۹٠-٩﴾﴿\s]+$/.test(text.trim());
 }

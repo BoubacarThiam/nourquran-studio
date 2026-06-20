@@ -82,7 +82,9 @@ export const RECITERS: Reciter[] = [
     name_arabic: "محمد اللحيدان",
     style: "Murattal",
     audioUrlTemplate: "https://server8.mp3quran.net/lhdan/{chapter}.mp3",
-    everyayahId: 140,
+    // Pas de récitation par verset chez everyayah.com pour ce récitateur
+    // (vérifié : aucune entrée dans son catalogue) → pas de fallback possible.
+    everyayahId: 0,
   },
   {
     id: 209,
@@ -90,7 +92,7 @@ export const RECITERS: Reciter[] = [
     name_arabic: "ماهر المعيقلي",
     style: "Murattal",
     audioUrlTemplate: "https://server12.mp3quran.net/maher/{chapter}.mp3",
-    everyayahId: 10,
+    everyayahId: 209,
   },
   {
     id: 201,
@@ -98,7 +100,7 @@ export const RECITERS: Reciter[] = [
     name_arabic: "ناصر القطامي",
     style: "Murattal",
     audioUrlTemplate: "https://server6.mp3quran.net/qtm/{chapter}.mp3",
-    everyayahId: 0,
+    everyayahId: 201,
   },
   {
     id: 202,
@@ -106,7 +108,7 @@ export const RECITERS: Reciter[] = [
     name_arabic: "عبد الله بصفر",
     style: "Murattal",
     audioUrlTemplate: "https://server7.mp3quran.net/basit/{chapter}.mp3",
-    everyayahId: 0,
+    everyayahId: 202,
   },
 ];
 
@@ -149,8 +151,9 @@ const EVERYAYAH_SLUGS: Record<number, string> = {
   6:   "Abdurrahmaan_As-Sudais_192kbps",
   11:  "Shuraym_64kbps",
   137: "Yasser_Ad-Dussary_128kbps",
-  140: "Muhammad_Luhaidan_64kbps",
-  10:  "Maher_AlMuaiqly_128kbps",
+  209: "MaherAlMuaiqly128kbps",
+  201: "Nasser_Alqatami_128kbps",
+  202: "Abdullah_Basfar_192kbps",
   4:   "Abu_Bakr_Ash-Shaatree_128kbps",
   5:   "Hani_Rifai_192kbps",
   9:   "Siddiq_Al-Minshawi_128kbps",

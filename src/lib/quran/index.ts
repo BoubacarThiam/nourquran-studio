@@ -16,9 +16,10 @@ export { RECITERS, RECITERS_WITH_TIMING, getReciter, buildChapterAudioUrl, build
 
 import { fetchSurah } from "./surahs";
 import { fetchVerses } from "./verses";
-import { fetchChapterAudio, mergeTimings } from "./audio";
+import { fetchChapterAudio, mergeTimings, isVerseMarker } from "./audio";
 import { buildChapterAudioUrl } from "./reciters";
 import { shouldShowBismillah, buildBismillahVerse, BISMILLAH_DURATION_MS } from "./bismillah";
+import { getCachedChapterDurationMs } from "./duration";
 import type { Verse, Surah } from "@/types/quran";
 
 export interface LoadedChapter {
@@ -51,7 +52,29 @@ export async function loadChapterData(
     fetchChapterAudio(reciterId, surahId),
   ]);
 
-  let verses = mergeTimings(rawVerses, chapterAudio, reciterId, surahId);
+  // Récitateurs sans timing QuranCDN réel (Al-Luhaidan, Maher, Qatami,
+  // Basfar) : un seul fichier "chapitre entier" existe, sans aucun ancrage
+  // temporel par verset. On calibre la durée estimée par mot sur la durée
+  // RÉELLE de ce fichier (sondage MP3, voir duration.ts) plutôt qu'une
+  // constante générique (~420ms/mot) — sinon le rythme propre à chaque
+  // récitateur (Al-Luhaidan récite p. ex. ~2.7x plus lentement que cette
+  // moyenne) fait dériver l'affichage des versets de plus en plus loin de
+  // l'audio réel au fil de la sourate.
+  let calibratedWordMs: number | undefined;
+  if (!chapterAudio) {
+    const realChapterAudioUrl = buildChapterAudioUrl(reciterId, surahId);
+    if (realChapterAudioUrl) {
+      const isFullChapter = (options.from ?? 1) === 1 && (!options.to || options.to >= surah.verses_count);
+      const wordSource = isFullChapter ? rawVerses : await fetchVerses(surahId, { translationIds: [] });
+      const totalWords = countRealWords(wordSource);
+      const realDurationMs = await getCachedChapterDurationMs(realChapterAudioUrl);
+      if (realDurationMs && totalWords > 0) {
+        calibratedWordMs = realDurationMs / totalWords;
+      }
+    }
+  }
+
+  let verses = mergeTimings(rawVerses, chapterAudio, reciterId, surahId, calibratedWordMs);
   const verseCount = verses.length;
   const wantsBismillah = shouldShowBismillah(surah, options.from ?? 1);
 
@@ -63,7 +86,7 @@ export async function loadChapterData(
   // les durées estimées de tous les versets restent cohérentes ensuite.
   const showBismillah = wantsBismillah && !!chapterAudio;
   if (wantsBismillah && !chapterAudio) {
-    verses = [buildBismillahVerse(surahId, options.translationIds ?? []) as Verse, ...verses];
+    verses = [buildBismillahVerse(surahId, options.translationIds ?? [], calibratedWordMs) as Verse, ...verses];
   }
 
   type EnrichedVerse = typeof verses[number] & {
@@ -100,4 +123,12 @@ export async function loadChapterData(
     chapterAudioUrl,
     totalDurationMs,
   };
+}
+
+/** Compte les mots réels (hors marqueurs de fin de verset) d'une liste de versets. */
+function countRealWords(verses: Verse[]): number {
+  return verses.reduce(
+    (acc, v) => acc + v.words.filter((w) => !isVerseMarker(w.text_uthmani)).length,
+    0
+  );
 }

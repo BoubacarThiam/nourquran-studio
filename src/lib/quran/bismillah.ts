@@ -51,14 +51,19 @@ export function shouldShowBismillah(surah: Surah, fromVerse: number): boolean {
  * réels, pour les récitateurs sans timing QuranCDN dont l'audio continu
  * contient réellement la basmala récitée au tout début.
  */
-export function buildBismillahVerse(surahId: number, translationIds: number[]): RenderVerse {
-  const durationMs = Math.max(ESTIMATED_MIN_MS, BISMILLAH_WORDS.length * ESTIMATED_WORD_MS);
-  const wordMs = durationMs / BISMILLAH_WORDS.length;
+export function buildBismillahVerse(
+  surahId: number,
+  translationIds: number[],
+  calibratedWordMs?: number
+): RenderVerse {
+  const wordMs = calibratedWordMs ?? ESTIMATED_WORD_MS;
+  const durationMs = Math.max(ESTIMATED_MIN_MS, BISMILLAH_WORDS.length * wordMs);
+  const perWordMs = durationMs / BISMILLAH_WORDS.length;
 
   const words: WordSegment[] = BISMILLAH_WORDS.map((text, i) => ({
     position: i + 1,
-    timestamp_from: Math.round(i * wordMs),
-    timestamp_to:   Math.round((i + 1) * wordMs),
+    timestamp_from: Math.round(i * perWordMs),
+    timestamp_to:   Math.round((i + 1) * perWordMs),
     text_uthmani:   text,
     char_type:      "word" as const,
   }));
