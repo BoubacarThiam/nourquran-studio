@@ -11,7 +11,7 @@ export const TRANSLATION_IDS = {
 interface QuranWord {
   id: number;
   position: number;
-  char_type: string;
+  char_type_name: string;
   text_uthmani: string;
   page_number: number;
   transliteration?: { text: string };
@@ -58,7 +58,7 @@ export async function fetchVerses(
     const data = await quranGet<VersesResponse>(`/verses/by_chapter/${surahId}`, {
       translations: translationIds.join(","),
       fields:       "text_uthmani",
-      word_fields:  "text_uthmani,transliteration",
+      word_fields:  "text_uthmani,transliteration,char_type_name",
       words:        "true",
       per_page:     50,
       page,
@@ -86,7 +86,7 @@ export async function fetchVerse(verseKey: string, translationIds = [TRANSLATION
   const data = await quranGet<{ verse: QuranVerse }>(`/verses/by_key/${verseKey}`, {
     translations: translationIds.join(","),
     fields:       "text_uthmani",
-    word_fields:  "text_uthmani,transliteration",
+    word_fields:  "text_uthmani,transliteration,char_type_name",
     words:        "true",
   });
   return mapVerse(data.verse);
@@ -106,7 +106,7 @@ function mapVerse(v: QuranVerse): Verse {
 
   // Translittération extraite du premier mot qui en a une
   const transliteration = v.words
-    .filter((w) => w.char_type === "word" && w.transliteration?.text)
+    .filter((w) => w.char_type_name === "word" && w.transliteration?.text)
     .map((w) => w.transliteration!.text)
     .join(" ");
 
@@ -123,7 +123,7 @@ function mapVerse(v: QuranVerse): Verse {
       timestamp_from: 0,
       timestamp_to: 0,
       text_uthmani: w.text_uthmani,
-      char_type: w.char_type as "word" | "end",
+      char_type: w.char_type_name as "word" | "end",
     })),
     audio_url: "", // sera rempli par buildAudioUrls()
   };

@@ -41,6 +41,7 @@ export function ExportModal({ onClose }: Props) {
   const audioRef    = useRef<HTMLAudioElement | null>(null);
   const bgVideoRef  = useRef<HTMLVideoElement | null>(null);
   const bgImgRef    = useRef<HTMLImageElement | null>(null);
+  const visibilityHandlerRef = useRef<(() => void) | null>(null);
 
   const durationSec = Math.round((loadedChapter?.totalDurationMs ?? 0) / 1000);
   const verseCount  = loadedChapter?.verseCount ?? 0;
@@ -61,6 +62,10 @@ export function ExportModal({ onClose }: Props) {
     if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
     if (audioRef.current)    { audioRef.current.pause(); audioRef.current.src = ""; }
     if (bgVideoRef.current)  { bgVideoRef.current.pause(); bgVideoRef.current.src = ""; }
+    if (visibilityHandlerRef.current) {
+      document.removeEventListener("visibilitychange", visibilityHandlerRef.current);
+      visibilityHandlerRef.current = null;
+    }
   }
 
   // Déclenché par le bouton : met à jour la phase pour monter le canvas, puis attend useEffect
@@ -192,12 +197,43 @@ export function ExportModal({ onClose }: Props) {
       MediaRecorder.isTypeSupported("video/webm")                 ? "video/webm" :
       "video/mp4";
 
-    const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 5_000_000 });
+    // Les sourates longues récitées par certains récitateurs durent plusieurs
+    // heures (ex. Al-Baqarah ~90min+) — à 5 Mbps ça représente plusieurs Go
+    // accumulés en mémoire avant l'assemblage final du Blob. On réduit le
+    // débit proportionnellement au-delà de 20 minutes pour limiter le risque
+    // de saturation mémoire / crash de l'onglet sur les exports très longs.
+    const estimatedMinutes  = totalMs / 60000;
+    const videoBitsPerSecond = estimatedMinutes > 20
+      ? Math.max(2_000_000, Math.round(5_000_000 * (20 / estimatedMinutes)))
+      : 5_000_000;
+
+    const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond });
     recorderRef.current = recorder;
+
+    // Échec en cours d'enregistrement — utilisé par onerror et par le chien
+    // de garde anti-blocage ci-dessous pour empêcher onstop de produire un
+    // fichier "réussi" tronqué après un échec.
+    const phaseFailedRef = { current: false };
+
+    function cleanupAndFail(message: string) {
+      phaseFailedRef.current = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (recorder.state !== "inactive") recorder.stop();
+      audioEl.pause();
+      bgVideoEl?.pause();
+      setError(message);
+      setPhase("failed");
+    }
 
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onerror = () => {
+      cleanupAndFail("Le navigateur a interrompu l'enregistrement (mémoire insuffisante ou ressource perdue). Essayez une résolution plus basse ou une plage de versets plus courte.");
+    };
     recorder.onstop = () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (phaseFailedRef.current) return;
       const outputBlob = new Blob(chunks, { type: mimeType.split(";")[0] });
       const ext  = mimeType.includes("mp4") ? "mp4" : "webm";
       setBlob(outputBlob);
@@ -214,10 +250,54 @@ export function ExportModal({ onClose }: Props) {
 
     // ── Boucle de rendu ────────────────────────────────────────────
     // Référence temporelle : audio si disponible, sinon horloge murale
-    const wallStart   = performance.now();
+    let wallStart     = performance.now();
     const hasAudio    = !!inputProps.chapterAudioUrl && audioEl.src;
     const bismillahMs = inputProps.showBismillah ? BISMILLAH_DURATION_MS : 0;
     let audioStarted  = false;
+
+    audioEl.onerror = () => {
+      cleanupAndFail("La lecture de l'audio a été interrompue (problème réseau). Réessayez — pour les sourates très longues, une connexion stable est nécessaire pendant tout l'enregistrement.");
+    };
+
+    // Chien de garde : si l'audio ne progresse plus pendant un long moment
+    // alors qu'il n'est ni en pause volontaire ni terminé (flux réseau
+    // interrompu sur un fichier audio continu de plusieurs dizaines de Mo),
+    // on échoue proprement plutôt que de laisser l'enregistrement bloqué
+    // indéfiniment sur la même frame.
+    const STALL_TIMEOUT_MS = 20_000;
+    let lastAudioTime  = -1;
+    let lastProgressAt = performance.now();
+
+    // ── Gestion de la visibilité de l'onglet ────────────────────────
+    // Un export dure aussi longtemps que l'audio réel (jusqu'à plusieurs
+    // heures pour une longue sourate récitée lentement) — il est irréaliste
+    // d'exiger que l'utilisateur garde l'onglet au premier plan en
+    // permanence. Sans ceci, mettre l'onglet en arrière-plan suspend
+    // requestAnimationFrame mais pas l'audio, ce qui désynchronise
+    // irrémédiablement l'enregistrement (frames figées, sauts de contenu).
+    // On met donc tout en pause à la mise en arrière-plan et on reprend
+    // exactement où l'on s'était arrêté au retour.
+    let hiddenAt: number | null = null;
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        hiddenAt = performance.now();
+        if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        audioEl.pause();
+        bgVideoEl?.pause();
+        if (recorder.state === "recording") recorder.pause();
+      } else if (hiddenAt !== null) {
+        wallStart += performance.now() - hiddenAt;
+        lastProgressAt += performance.now() - hiddenAt;
+        hiddenAt = null;
+        if (recorder.state === "paused") recorder.resume();
+        if (audioStarted) audioEl.play().catch(() => {});
+        bgVideoEl?.play().catch(() => {});
+        if (audioCtx?.state === "suspended") audioCtx.resume();
+        if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    visibilityHandlerRef.current = handleVisibilityChange;
 
     function tick() {
       if (!canvas) return;
@@ -245,6 +325,17 @@ export function ExportModal({ onClose }: Props) {
         if (audioCtx?.state === "suspended") audioCtx.resume();
       }
 
+      // Chien de garde anti-blocage (audio réseau interrompu sans erreur explicite)
+      if (hasAudio && !document.hidden) {
+        if (audioEl.currentTime !== lastAudioTime) {
+          lastAudioTime  = audioEl.currentTime;
+          lastProgressAt = performance.now();
+        } else if (!audioEl.paused && performance.now() - lastProgressAt > STALL_TIMEOUT_MS) {
+          cleanupAndFail("L'audio s'est arrêté de progresser (connexion instable pendant un enregistrement long). Réessayez avec une connexion stable.");
+          return;
+        }
+      }
+
       const audioElapsed = hasAudio
         ? (audioEl.currentTime * 1000) - rangeOffsetMs
         : wallElapsed - bismillahMs;
@@ -265,6 +356,7 @@ export function ExportModal({ onClose }: Props) {
 
       // Fin de l'enregistrement
       if (globalElapsedMs >= totalMs || (hasAudio && audioEl.ended)) {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
         cancelAnimationFrame(rafRef.current!);
         setProgress(100);
         setStatusText("Finalisation…");
