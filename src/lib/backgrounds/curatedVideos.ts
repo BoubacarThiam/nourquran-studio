@@ -1,7 +1,13 @@
 /**
  * Bibliothèque de vidéos de fond sélectionnées à la main.
- * Les miniatures (images.pexels.com) sont publiques — aucune clé API nécessaire.
- * L'URL de lecture est récupérée via /api/pexels/video/{id} lorsque la clé est configurée.
+ *
+ * Important : les miniatures Pexels n'ont PAS d'URL prévisible à partir du
+ * seul ID (le nom de fichier dépend d'un slug propre à chaque vidéo, ex.
+ * "aesthetic-vibe-summer-...-33170755.jpeg", pas "free-video-33170755.jpg").
+ * Toutes les entrées ci-dessous ont donc été vérifiées une à une via l'API
+ * Pexels (existence + URL de miniature réelle) avant d'être ajoutées — ne
+ * pas reconstruire une URL de miniature à partir d'un ID sans la vérifier,
+ * la plupart des tentatives échouent avec une 404.
  */
 
 export interface CuratedVideo {
@@ -9,7 +15,7 @@ export interface CuratedVideo {
   category:  string;
   label:     string;
   thumbnail: string;
-  duration:  number;  // secondes (approximatif)
+  duration:  number;  // secondes (valeur réelle Pexels)
 }
 
 export const CURATED_CATEGORIES: Record<string, string> = {
@@ -23,50 +29,59 @@ export const CURATED_CATEGORIES: Record<string, string> = {
   light:    "Lumière & Bokeh",
 };
 
-function t(id: string) {
-  return `https://images.pexels.com/videos/${id}/free-video-${id}.jpg?auto=compress&cs=tinysrgb&w=640&h=360`;
-}
-
 export const CURATED_VIDEOS: CuratedVideo[] = [
   // ── Mosquée & Islam ──────────────────────────────────────────────────
-  { id: "3569183", category: "mosque",  label: "Mosquée dorée",          thumbnail: t("3569183"), duration: 20 },
-  { id: "5206707", category: "mosque",  label: "Architecture islamique",  thumbnail: t("5206707"), duration: 15 },
-  { id: "3876383", category: "mosque",  label: "Intérieur de mosquée",   thumbnail: t("3876383"), duration: 18 },
-  { id: "4007009", category: "mosque",  label: "Coupole & Minarets",     thumbnail: t("4007009"), duration: 22 },
+  { id: "6576070",  category: "mosque",  label: "Mosquée illuminée",      thumbnail: "https://images.pexels.com/videos/6576070/pexels-photo-6576070.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 18 },
+  { id: "12959912", category: "mosque",  label: "Architecture sacrée",    thumbnail: "https://images.pexels.com/videos/12959912/pexels-photo-12959912.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 35 },
+  { id: "7318023",  category: "mosque",  label: "Dôme et minaret",        thumbnail: "https://images.pexels.com/videos/7318023/pexels-photo-7318023.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 22 },
+  { id: "20288879", category: "mosque",  label: "Mosquée de Songkhla",    thumbnail: "https://images.pexels.com/videos/20288879/central-mosque-songkhla-mosque-mosque-songkhla-mosque-thailand-20288879.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 34 },
 
   // ── Désert & Dunes ───────────────────────────────────────────────────
-  { id: "856016",  category: "desert",  label: "Dunes de sable doré",    thumbnail: t("856016"),  duration: 18 },
-  { id: "3629537", category: "desert",  label: "Désert au coucher",      thumbnail: t("3629537"), duration: 25 },
-  { id: "1192116", category: "desert",  label: "Horizon désertique",     thumbnail: t("1192116"), duration: 20 },
-  { id: "3130281", category: "desert",  label: "Dunes ondulantes",       thumbnail: t("3130281"), duration: 15 },
+  { id: "856016",   category: "desert",  label: "Dunes de sable doré",    thumbnail: "https://images.pexels.com/videos/856016/free-video-856016.jpg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 30 },
+  { id: "1192116",  category: "desert",  label: "Horizon désertique",     thumbnail: "https://images.pexels.com/videos/1192116/free-video-1192116.jpg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 66 },
+  { id: "17833698", category: "desert",  label: "Dunes balayées par le vent", thumbnail: "https://images.pexels.com/videos/17833698/desert-dune-dunes-sand-dunes-17833698.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 10 },
+  { id: "8865223",  category: "desert",  label: "Étendue désertique",     thumbnail: "https://images.pexels.com/videos/8865223/pexels-photo-8865223.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 16 },
+  { id: "33170755", category: "desert",  label: "Ambiance désert sauvage", thumbnail: "https://images.pexels.com/videos/33170755/aesthetic-vibe-summer-american-wilderness-cinematic-video-clips-desert-vibe-33170755.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 21 },
+  { id: "16905150", category: "desert",  label: "Dunes au lever du soleil", thumbnail: "https://images.pexels.com/videos/16905150/windy-sand-dunes-at-sunrise-16905150.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 21 },
 
   // ── Ciel étoilé ──────────────────────────────────────────────────────
-  { id: "3066029", category: "sky",     label: "Voie lactée",            thumbnail: t("3066029"), duration: 30 },
-  { id: "1624360", category: "sky",     label: "Étoiles timelapse",      thumbnail: t("1624360"), duration: 20 },
-  { id: "1448735", category: "sky",     label: "Ciel nocturne",          thumbnail: t("1448735"), duration: 15 },
+  { id: "1448735",  category: "sky",     label: "Ciel nocturne",          thumbnail: "https://images.pexels.com/videos/1448735/free-video-1448735.jpg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 32 },
+  { id: "12336972", category: "sky",     label: "Voûte étoilée",          thumbnail: "https://images.pexels.com/videos/12336972/pexels-photo-12336972.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 20 },
+  { id: "12336940", category: "sky",     label: "Ciel constellé",         thumbnail: "https://images.pexels.com/videos/12336940/pexels-photo-12336940.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 21 },
+  { id: "14369240", category: "sky",     label: "Nuit profonde",          thumbnail: "https://images.pexels.com/videos/14369240/abundance-abundant-adoration-adventure-14369240.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 14 },
+  { id: "12336965", category: "sky",     label: "Étoiles scintillantes",  thumbnail: "https://images.pexels.com/videos/12336965/pexels-photo-12336965.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 21 },
 
   // ── Lever & Coucher de soleil ────────────────────────────────────────
-  { id: "4812207", category: "sunrise", label: "Coucher de soleil doré", thumbnail: t("4812207"), duration: 30 },
-  { id: "5498527", category: "sunrise", label: "Lever de soleil",        thumbnail: t("5498527"), duration: 25 },
-  { id: "1578922", category: "sunrise", label: "Horizon embrasé",        thumbnail: t("1578922"), duration: 20 },
-  { id: "857251",  category: "sunrise", label: "Crépuscule montagnard",  thumbnail: t("857251"),  duration: 22 },
+  { id: "4812207",  category: "sunrise", label: "Coucher de soleil doré", thumbnail: "https://images.pexels.com/videos/4812207/air-child-dad-dress-4812207.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=630", duration: 9 },
+  { id: "857251",   category: "sunrise", label: "Crépuscule montagnard",  thumbnail: "https://images.pexels.com/videos/857251/free-video-857251.jpg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 14 },
+  { id: "4460096",  category: "sunrise", label: "Aube dorée",             thumbnail: "https://images.pexels.com/videos/4460096/pexels-photo-4460096.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 14 },
+  { id: "5009153",  category: "sunrise", label: "Lever de soleil paisible", thumbnail: "https://images.pexels.com/videos/5009153/pexels-photo-5009153.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 47 },
+  { id: "35473059", category: "sunrise", label: "Ciel embrasé",           thumbnail: "https://images.pexels.com/videos/35473059/pexels-photo-35473059.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 12 },
+  { id: "5926176",  category: "sunrise", label: "Crépuscule nuageux",     thumbnail: "https://images.pexels.com/videos/5926176/autumn-mood-autumn-mood-forest-clouds-dark-sky-5926176.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 45 },
 
   // ── Mer & Eau ────────────────────────────────────────────────────────
-  { id: "4062069", category: "ocean",   label: "Mer apaisante",          thumbnail: t("4062069"), duration: 25 },
-  { id: "2170237", category: "ocean",   label: "Vagues sur la plage",    thumbnail: t("2170237"), duration: 20 },
-  { id: "3126453", category: "ocean",   label: "Océan nocturne",         thumbnail: t("3126453"), duration: 18 },
+  { id: "3126453",  category: "ocean",   label: "Océan nocturne",         thumbnail: "https://images.pexels.com/videos/3126453/free-video-3126453.jpg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 23 },
+  { id: "3637949",  category: "ocean",   label: "Vagues douces",          thumbnail: "https://images.pexels.com/videos/3637949/free-video-3637949.jpg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 33 },
+  { id: "5404691",  category: "ocean",   label: "Vagues sur le rivage",   thumbnail: "https://images.pexels.com/videos/5404691/beach-waves-breaking-waves-crashing-waves-ocean-5404691.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 43 },
+  { id: "36301470", category: "ocean",   label: "Mer calme",              thumbnail: "https://images.pexels.com/videos/36301470/pexels-photo-36301470.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 15 },
+  { id: "5921867",  category: "ocean",   label: "Étendue marine",         thumbnail: "https://images.pexels.com/videos/5921867/pexels-photo-5921867.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 25 },
 
   // ── Nature & Forêt ───────────────────────────────────────────────────
-  { id: "3296602", category: "nature",  label: "Forêt mystique",         thumbnail: t("3296602"), duration: 30 },
-  { id: "4947476", category: "nature",  label: "Rayons de lumière",      thumbnail: t("4947476"), duration: 20 },
-  { id: "1388942", category: "nature",  label: "Verdure paisible",       thumbnail: t("1388942"), duration: 25 },
+  { id: "13749770", category: "nature",  label: "Survol de forêt",        thumbnail: "https://images.pexels.com/videos/13749770/dji-drone-flying-forrest-13749770.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 36 },
+  { id: "6564550",  category: "nature",  label: "Rayons à travers les arbres", thumbnail: "https://images.pexels.com/videos/6564550/pexels-photo-6564550.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 39 },
+  { id: "11265968", category: "nature",  label: "Lumière filtrée",        thumbnail: "https://images.pexels.com/videos/11265968/lens-flare-slowmotion-sun-flare-11265968.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 10 },
+  { id: "35659481", category: "nature",  label: "Forêt vue du ciel",      thumbnail: "https://images.pexels.com/videos/35659481/aerial-forest-cinematic-nature-drone-flight-drone-movement-35659481.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 12 },
 
   // ── Pluie & Nuages ───────────────────────────────────────────────────
-  { id: "2499611", category: "rain",    label: "Pluie sur fenêtre",      thumbnail: t("2499611"), duration: 20 },
-  { id: "4622982", category: "rain",    label: "Nuages dramatiques",     thumbnail: t("4622982"), duration: 15 },
+  { id: "2499611",  category: "rain",    label: "Pluie sur fenêtre",      thumbnail: "https://images.pexels.com/videos/2499611/free-video-2499611.jpg?auto=compress&cs=tinysrgb&fit=crop&h=1200&w=630", duration: 22 },
+  { id: "6252535",  category: "rain",    label: "Pluie apaisante",        thumbnail: "https://images.pexels.com/videos/6252535/pexels-photo-6252535.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 47 },
+  { id: "15419572", category: "rain",    label: "Gouttes mystiques",      thumbnail: "https://images.pexels.com/videos/15419572/glass-mystical-rain-raindrops-15419572.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 30 },
+  { id: "13292544", category: "rain",    label: "Gouttes en gros plan",   thumbnail: "https://images.pexels.com/videos/13292544/backgrouns-videos-close-up-drop-of-water-droplets-13292544.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 43 },
+  { id: "8549580",  category: "rain",    label: "Ambiance cosy sous la pluie", thumbnail: "https://images.pexels.com/videos/8549580/coffee-cold-weather-cosy-cosy-home-8549580.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 38 },
 
   // ── Lumière & Bokeh ──────────────────────────────────────────────────
-  { id: "1426785", category: "light",   label: "Bokeh doré",             thumbnail: t("1426785"), duration: 20 },
-  { id: "3785418", category: "light",   label: "Lumières flottantes",    thumbnail: t("3785418"), duration: 18 },
-  { id: "2068193", category: "light",   label: "Particules lumineuses",  thumbnail: t("2068193"), duration: 22 },
+  { id: "10296170", category: "light",   label: "Particules dorées",      thumbnail: "https://images.pexels.com/videos/10296170/pexels-photo-10296170.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 20 },
+  { id: "4173717",  category: "light",   label: "Bokeh lumineux",         thumbnail: "https://images.pexels.com/videos/4173717/pexels-photo-4173717.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 66 },
+  { id: "34645258", category: "light",   label: "Lumières abstraites",    thumbnail: "https://images.pexels.com/videos/34645258/3d-abstract-art-award-34645258.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 20 },
+  { id: "34645311", category: "light",   label: "Ambiance éthérée",       thumbnail: "https://images.pexels.com/videos/34645311/abstract-aesthetic-airy-ambient-34645311.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=630&w=1200", duration: 20 },
 ];

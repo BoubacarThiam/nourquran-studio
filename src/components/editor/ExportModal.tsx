@@ -66,7 +66,11 @@ export function ExportModal({ onClose }: Props) {
     if (rafRef.current)      cancelAnimationFrame(rafRef.current);
     if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
     if (audioRef.current)    { audioRef.current.pause(); audioRef.current.src = ""; }
-    if (bgVideoRef.current)  { bgVideoRef.current.pause(); bgVideoRef.current.src = ""; }
+    if (bgVideoRef.current)  {
+      bgVideoRef.current.pause();
+      bgVideoRef.current.src = "";
+      bgVideoRef.current.remove();
+    }
     if (visibilityHandlerRef.current) {
       document.removeEventListener("visibilitychange", visibilityHandlerRef.current);
       visibilityHandlerRef.current = null;
@@ -157,11 +161,32 @@ export function ExportModal({ onClose }: Props) {
     if ((bg.type === "pexels_video" || bg.type === "upload") && bg.url) {
       setStatusText("Chargement de la vidéo de fond…");
       const vid = document.createElement("video");
+      // crossOrigin doit être posé AVANT src (spec HTML) pour que le navigateur
+      // démarre le fetch en mode CORS dès la première requête.
+      vid.crossOrigin = "anonymous";
       vid.src      = bg.url;
       vid.muted    = true;
       vid.loop     = true;
-      vid.crossOrigin = "anonymous";
       vid.preload  = "auto";
+      // Un <video> jamais attaché au DOM est régulièrement déprioritisé par
+      // Chromium (décodage suspendu/jamais relancé après les premières frames).
+      // Le simple fait de l'attacher ne suffit pas non plus : le placer hors
+      // de la zone visible (ex. left:-9999px) le rend "non intersectant" avec
+      // le viewport, ce qui déclenche la même optimisation d'économie de
+      // batterie qui suspend le décodage des vidéos hors écran — le fond
+      // restait figé après ~1s d'avance puis ne progressait plus du tout
+      // pendant tout le reste de l'enregistrement. On le garde donc DANS le
+      // rectangle du viewport (0,0), juste invisible via opacity (et non
+      // display:none, qui désactive aussi le décodage).
+      vid.style.position       = "fixed";
+      vid.style.left           = "0";
+      vid.style.top            = "0";
+      vid.style.width          = "1px";
+      vid.style.height         = "1px";
+      vid.style.opacity        = "0";
+      vid.style.pointerEvents  = "none";
+      vid.style.zIndex         = "-1";
+      document.body.appendChild(vid);
       bgVideoEl    = vid;
       bgVideoRef.current = vid;
       await new Promise<void>((res) => {

@@ -218,8 +218,15 @@ export function BackgroundTab() {
   }, [mode, config.aspectRatio]);
 
   const selectVideo = (v: PexelsVideo) => {
-    const files = [...v.video_files].sort((a, b) => b.width - a.width);
-    const best  = files.find((f) => f.quality === "hd") ?? files[0];
+    // Jamais la 4K : la sortie ne dépasse pas 1080p (souvent rendue à moitié
+    // résolution à l'export) — télécharger un fichier 4K (3-6x plus lourd)
+    // ne change rien visuellement mais peut empêcher le fond de finir de
+    // charger à temps pendant l'enregistrement. On prend le plus grand
+    // fichier qui reste ≤ 1920px de large.
+    const MAX_WIDTH = 1920;
+    const files = v.video_files.filter((f) => f.width);
+    const withinBudget = files.filter((f) => f.width <= MAX_WIDTH).sort((a, b) => b.width - a.width);
+    const best = withinBudget[0] ?? [...files].sort((a, b) => a.width - b.width)[0];
     setConfig({ background: { type: "pexels_video", pexelsId: String(v.id), url: best?.link ?? "", thumbnail: v.image } });
   };
 

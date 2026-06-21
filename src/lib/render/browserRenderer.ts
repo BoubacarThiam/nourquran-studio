@@ -108,32 +108,39 @@ function drawWrappedText(
   return lines.length;
 }
 
-function drawArabicKaraoke(
-  ctx:            CanvasRenderingContext2D,
-  words:          WordSegment[],
-  absoluteMs:     number,
-  centerX:        number,
-  centerY:        number,
-  fontSize:       number,
-  fontFamily:     string,
-  arabicColor:    string,
-  highlightColor: string,
-  maxWidth:       number,
-): number /* height used */ {
-  const gap        = fontSize * 0.28;
+interface KaraokeLayout {
+  lines:  Array<{ word: WordSegment; width: number }[]>;
+  totalH: number;
+}
+
+// Le découpage en lignes (measureText + retour à la ligne RTL) ne dépend que
+// du texte/de la police/de la largeur disponible — jamais du temps. Sans ce
+// cache, on le recalculait à chaque frame (jusqu'à 30x/s) pour un résultat
+// identique, ce qui pouvait faire chuter le frame-rate réel de l'enregistrement
+// (et donc des saccades dans la vidéo finale) sur les versets à nombreux mots.
+const layoutCache = new Map<string, KaraokeLayout>();
+
+function getKaraokeLayout(
+  ctx:        CanvasRenderingContext2D,
+  words:      WordSegment[],
+  verseKey:   string,
+  fontSize:   number,
+  fontFamily: string,
+  maxWidth:   number,
+): KaraokeLayout {
+  const cacheKey = `${verseKey}|${fontSize}|${fontFamily}|${maxWidth}`;
+  const cached = layoutCache.get(cacheKey);
+  if (cached) return cached;
+
+  const gap = fontSize * 0.28;
   const lineHeight = fontSize * 2.3;
 
-  ctx.font          = `${fontSize}px ${fontFamily}`;
-  ctx.textBaseline  = "middle";
-  ctx.direction     = "rtl";
-
-  // Mesure des largeurs
+  ctx.font = `${fontSize}px ${fontFamily}`;
   const measured = words.map((w) => ({
     word:  w,
     width: ctx.measureText(w.text_uthmani).width,
   }));
 
-  // Construction des lignes RTL
   const lines: Array<{ word: WordSegment; width: number }[]> = [];
   let currentLine: typeof lines[0] = [];
   let currentWidth = 0;
@@ -151,8 +158,33 @@ function drawArabicKaraoke(
   }
   if (currentLine.length > 0) lines.push(currentLine);
 
-  const totalH = lines.length * lineHeight;
-  const topY   = centerY - totalH / 2;
+  const layout = { lines, totalH: lines.length * lineHeight };
+  layoutCache.set(cacheKey, layout);
+  return layout;
+}
+
+function drawArabicKaraoke(
+  ctx:            CanvasRenderingContext2D,
+  words:          WordSegment[],
+  verseKey:       string,
+  absoluteMs:     number,
+  centerX:        number,
+  centerY:        number,
+  fontSize:       number,
+  fontFamily:     string,
+  arabicColor:    string,
+  highlightColor: string,
+  maxWidth:       number,
+): number /* height used */ {
+  const gap        = fontSize * 0.28;
+  const lineHeight = fontSize * 2.3;
+
+  ctx.font          = `${fontSize}px ${fontFamily}`;
+  ctx.textBaseline  = "middle";
+  ctx.direction     = "rtl";
+
+  const { lines, totalH } = getKaraokeLayout(ctx, words, verseKey, fontSize, fontFamily, maxWidth);
+  const topY = centerY - totalH / 2;
 
   for (let l = 0; l < lines.length; l++) {
     const row      = lines[l];
@@ -282,6 +314,16 @@ export function renderCompositionFrame({
   // donc on utilise le temps écoulé depuis le début du verset.
   const wordTimingMs = rv._chapterAudio ? absoluteMs : verseElapsedMs;
 
+  // Fondu d'entrée/sortie du verset (même durée que l'aperçu Remotion —
+  // 12 frames à 30fps — pour que l'export final soit cohérent avec ce que
+  // l'utilisateur a vu dans le player). Sans ce fondu, le texte apparaissait
+  // et disparaissait brutalement d'une frame à l'autre dans la vidéo exportée.
+  const FADE_MS = 400;
+  const verseDurationMs = rv._durationMs > 0 ? rv._durationMs : 5000;
+  const fadeIn  = Math.min(verseElapsedMs / FADE_MS, 1);
+  const fadeOut = Math.min((verseDurationMs - verseElapsedMs) / FADE_MS, 1);
+  ctx.globalAlpha = Math.max(0, Math.min(fadeIn, fadeOut, 1));
+
   const scaledTransFontSize = Math.round(translationFontSize * scale);
   const padding    = width  * 0.08;
   const maxTextW   = width  - padding * 2;
@@ -308,7 +350,7 @@ export function renderCompositionFrame({
   const arabicWords = rv.words.filter((w) => w.char_type === "word");
   if (arabicWords.length > 0) {
     drawArabicKaraoke(
-      ctx, arabicWords, wordTimingMs,
+      ctx, arabicWords, rv.verse_key, wordTimingMs,
       width / 2, textCenterY,
       arabicFontSize, fontFamily,
       arabicColor, highlightColor, maxTextW,
@@ -360,6 +402,8 @@ export function renderCompositionFrame({
     ctx.direction    = "ltr";
     drawWrappedText(ctx, t2.text, width / 2, transY, maxTextW * 0.78, t2Size * 1.75);
   }
+
+  ctx.globalAlpha = 1;
 }
 
 export interface RenderBismillahParams {
