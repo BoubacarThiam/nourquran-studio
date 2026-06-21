@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/store/editorStore";
 import type { LoadedChapter } from "@/lib/quran";
+import type { RenderVerse } from "@/types/remotion";
+import { CUSTOM_RECITER_ID, calibrateVersesToRealDuration } from "@/lib/quran/customAudio";
 
 /**
  * Charge les données du chapitre coranique depuis /api/quran/chapter
@@ -19,11 +21,20 @@ export function useChapterLoader() {
   const setChapter   = useEditorStore((s) => s.setChapter);
   const setLoading   = useEditorStore((s) => s.setLoading);
   const setLoadError = useEditorStore((s) => s.setLoadError);
+  const customAudio  = useEditorStore((s) => s.customAudio);
 
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
     if (!surahId) return;
+
+    // En mode "récitation importée", il faut une durée réelle connue pour
+    // calibrer l'estimation des versets — sans elle (ex. après un rechargement
+    // de page, l'URL blob locale ne survit pas), on ne peut pas charger.
+    if (reciterId === CUSTOM_RECITER_ID && !customAudio) {
+      setLoadError("Réimportez votre fichier audio — il n'est pas conservé après un rechargement de la page.");
+      return;
+    }
 
     // Annuler la requête précédente si elle est encore en cours
     abortRef.current?.abort();
@@ -51,7 +62,24 @@ export function useChapterLoader() {
       }
 
       const data: LoadedChapter = await res.json();
-      setChapter(data);
+
+      // Mode récitation importée : pas d'audio chapitre réel côté serveur —
+      // on recalibre les durées estimées sur la durée RÉELLE du fichier
+      // importé, et on branche l'URL blob locale comme audio du chapitre.
+      if (reciterId === CUSTOM_RECITER_ID && customAudio) {
+        const calibrated = calibrateVersesToRealDuration(
+          data.verses as RenderVerse[],
+          customAudio.durationMs
+        );
+        setChapter({
+          ...data,
+          verses: calibrated,
+          chapterAudioUrl: customAudio.url,
+          totalDurationMs: customAudio.durationMs,
+        });
+      } else {
+        setChapter(data);
+      }
     } catch (err) {
       const e = err as Error;
       if (e.name === "AbortError") return;
@@ -59,7 +87,7 @@ export function useChapterLoader() {
     } finally {
       setLoading(false);
     }
-  }, [surahId, reciterId, fromVerse, toVerse, translationIds, setChapter, setLoading, setLoadError]);
+  }, [surahId, reciterId, fromVerse, toVerse, translationIds, customAudio, setChapter, setLoading, setLoadError]);
 
   // Chargement automatique quand les paramètres changent
   useEffect(() => {

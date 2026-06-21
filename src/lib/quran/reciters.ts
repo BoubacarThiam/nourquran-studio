@@ -75,41 +75,10 @@ export const RECITERS: Reciter[] = [
     everyayahId: 9,
   },
 
-  // ── Récitateurs sans timing QuranCDN (audio chapitre via mp3quran.net) ────
-  {
-    id: 0,
-    name: "Muhammad Al-Luhaidan",
-    name_arabic: "محمد اللحيدان",
-    style: "Murattal",
-    audioUrlTemplate: "https://server8.mp3quran.net/lhdan/{chapter}.mp3",
-    // Pas de récitation par verset chez everyayah.com pour ce récitateur
-    // (vérifié : aucune entrée dans son catalogue) → pas de fallback possible.
-    everyayahId: 0,
-  },
-  {
-    id: 209,
-    name: "Maher Al-Muaiqly",
-    name_arabic: "ماهر المعيقلي",
-    style: "Murattal",
-    audioUrlTemplate: "https://server12.mp3quran.net/maher/{chapter}.mp3",
-    everyayahId: 209,
-  },
-  {
-    id: 201,
-    name: "Nasser Al-Qatami",
-    name_arabic: "ناصر القطامي",
-    style: "Murattal",
-    audioUrlTemplate: "https://server6.mp3quran.net/qtm/{chapter}.mp3",
-    everyayahId: 201,
-  },
-  {
-    id: 202,
-    name: "Abdullah Basfar",
-    name_arabic: "عبد الله بصفر",
-    style: "Murattal",
-    audioUrlTemplate: "https://server7.mp3quran.net/basit/{chapter}.mp3",
-    everyayahId: 202,
-  },
+  // Note : Al-Luhaidan, Maher Al-Muaiqly, Qatami et Basfar ont été retirés —
+  // sans timing QuranCDN réel, leur synchronisation verset/audio n'est
+  // qu'une estimation calibrée, jamais exacte. Cette même estimation reste
+  // disponible pour l'import de récitation personnelle (voir customAudio.ts).
 ];
 
 /** Récitateurs avec support complet des timings mot-à-mot (via QuranCDN) */
@@ -151,9 +120,6 @@ const EVERYAYAH_SLUGS: Record<number, string> = {
   6:   "Abdurrahmaan_As-Sudais_192kbps",
   11:  "Shuraym_64kbps",
   137: "Yasser_Ad-Dussary_128kbps",
-  209: "MaherAlMuaiqly128kbps",
-  201: "Nasser_Alqatami_128kbps",
-  202: "Abdullah_Basfar_192kbps",
   4:   "Abu_Bakr_Ash-Shaatree_128kbps",
   5:   "Hani_Rifai_192kbps",
   9:   "Siddiq_Al-Minshawi_128kbps",

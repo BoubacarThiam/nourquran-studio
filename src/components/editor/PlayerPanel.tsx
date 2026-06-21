@@ -7,6 +7,7 @@ import { useEditorStore } from "@/store/editorStore";
 import { QuranVideoComposition } from "@remotion/compositions/QuranVideoComposition";
 import type { QuranCompositionProps, RenderVerse } from "@/types/remotion";
 import { RECITERS } from "@/lib/quran/reciters";
+import { CUSTOM_RECITER_ID } from "@/lib/quran/customAudio";
 import type { AspectRatio } from "@/types/quran";
 
 const ASPECT_RATIOS: Record<AspectRatio, { width: number; height: number }> = {
@@ -23,9 +24,13 @@ export function PlayerPanel() {
   const loadedChapter = useEditorStore((s) => s.loadedChapter);
   const isLoading     = useEditorStore((s) => s.isLoading);
   const loadError     = useEditorStore((s) => s.loadError);
+  const customAudio   = useEditorStore((s) => s.customAudio);
   const playerRef     = useRef<PlayerRef>(null);
 
   const reciter = RECITERS.find((r) => r.id === config.reciterId);
+  const reciterDisplayName = config.reciterId === CUSTOM_RECITER_ID
+    ? (customAudio?.fileName ?? "Ma récitation")
+    : reciter?.name ?? "";
   const { width, height } = ASPECT_RATIOS[config.aspectRatio];
 
   const totalDurationMs   = loadedChapter?.totalDurationMs ?? 5000;
@@ -39,10 +44,10 @@ export function PlayerPanel() {
     surahName:       loadedChapter
       ? `${loadedChapter.surah.name_arabic} — ${loadedChapter.surah.name_french}`
       : "",
-    reciterName:     reciter?.name ?? "",
+    reciterName:     reciterDisplayName,
     totalDurationMs,
     showBismillah:   loadedChapter?.showBismillah ?? false,
-  }), [config, loadedChapter, reciter, totalDurationMs]);
+  }), [config, loadedChapter, reciterDisplayName, totalDurationMs]);
 
   // Formats "hauts" (9:16, 4:5…) : la hauteur disponible pilote la taille,
   // la largeur en découle. Formats "larges" : l'inverse. Dans les deux cas

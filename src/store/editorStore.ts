@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import type { EditorConfig, Surah } from "@/types/quran";
 import type { LoadedChapter } from "@/lib/quran";
+import type { CustomAudio } from "@/lib/quran/customAudio";
 
 // Config par défaut de l'éditeur
 const DEFAULT_CONFIG: EditorConfig = {
@@ -51,6 +52,10 @@ interface EditorState {
   isLoading:     boolean;
   loadError:     string | null;
 
+  // Récitation importée par l'utilisateur (URL blob locale — non persistable,
+  // invalide après un rechargement de page)
+  customAudio: CustomAudio | null;
+
   // Progression du rendu
   renderJobId:      string | null;
   renderProgress:   number;
@@ -69,6 +74,7 @@ interface EditorState {
   setChapter:    (chapter: LoadedChapter | null) => void;
   setLoading:    (loading: boolean) => void;
   setLoadError:  (err: string | null) => void;
+  setCustomAudio: (audio: CustomAudio | null) => void;
 
   // Actions — rendu
   startRender:   (jobId: string) => void;
@@ -89,6 +95,7 @@ export const useEditorStore = create<EditorState>()(
         loadedChapter:  null,
         isLoading:      false,
         loadError:      null,
+        customAudio:    null,
         renderJobId:    null,
         renderProgress: 0,
         renderStatus:   "idle",
@@ -102,6 +109,7 @@ export const useEditorStore = create<EditorState>()(
         setChapter:   (chapter) => set({ loadedChapter: chapter }),
         setLoading:   (loading) => set({ isLoading: loading }),
         setLoadError: (err)     => set({ loadError: err }),
+        setCustomAudio: (audio) => set({ customAudio: audio }),
 
         startRender:  (jobId) => set({ renderJobId: jobId, renderProgress: 0, renderStatus: "rendering", renderOutputPath: null }),
         updateRender: (progress, status) => set((s) => ({
@@ -135,6 +143,7 @@ export const useEditorActions = () =>
     setChapter:   s.setChapter,
     setLoading:   s.setLoading,
     setLoadError: s.setLoadError,
+    setCustomAudio: s.setCustomAudio,
     startRender:  s.startRender,
     updateRender: s.updateRender,
     finishRender: s.finishRender,

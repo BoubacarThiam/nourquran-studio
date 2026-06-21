@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { RECITERS } from "@/lib/quran/reciters";
+import { CUSTOM_RECITER_ID } from "@/lib/quran/customAudio";
 import type { QuranCompositionProps, RenderVerse } from "@/types/remotion";
 import {
   getCompositionDimensions,
@@ -24,7 +25,11 @@ type Phase = "confirm" | "recording" | "done" | "failed";
 export function ExportModal({ onClose }: Props) {
   const config        = useEditorStore((s) => s.config);
   const loadedChapter = useEditorStore((s) => s.loadedChapter);
+  const customAudio   = useEditorStore((s) => s.customAudio);
   const reciter       = RECITERS.find((r) => r.id === config.reciterId);
+  const reciterDisplayName = config.reciterId === CUSTOM_RECITER_ID
+    ? (customAudio?.fileName ?? "Ma récitation")
+    : reciter?.name ?? "—";
 
   const [phase,      setPhase]      = useState<Phase>("confirm");
   const [progress,   setProgress]   = useState(0);
@@ -88,12 +93,33 @@ export function ExportModal({ onClose }: Props) {
   const doStartRecording = useCallback(async () => {
     if (!loadedChapter || !canvasRef.current) return;
 
+    // Détection en amont — certains navigateurs mobiles (anciens Safari iOS
+    // notamment) n'exposent pas captureStream/MediaRecorder du tout. Sans ce
+    // contrôle, l'erreur surviendrait silencieusement plus loin et laisserait
+    // l'interface bloquée sur "Enregistrement…" indéfiniment.
+    if (typeof MediaRecorder === "undefined" || typeof canvasRef.current.captureStream !== "function") {
+      setError("Votre navigateur ne supporte pas l'enregistrement vidéo dans la page. Essayez avec une version récente de Chrome, Firefox ou Safari.");
+      setPhase("failed");
+      return;
+    }
+
+    try {
+      await doStartRecordingInner();
+    } catch (err) {
+      setError((err as Error)?.message || "Une erreur inattendue a interrompu l'enregistrement.");
+      setPhase("failed");
+    }
+  }, [config, loadedChapter, reciterDisplayName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function doStartRecordingInner() {
+    if (!loadedChapter || !canvasRef.current) return;
+
     const inputProps: QuranCompositionProps = {
       ...config,
       verses:          loadedChapter.verses as RenderVerse[],
       chapterAudioUrl: loadedChapter.chapterAudioUrl ?? null,
       surahName:       `${loadedChapter.surah.name_arabic} — ${loadedChapter.surah.name_french}`,
-      reciterName:     reciter?.name ?? "",
+      reciterName:     reciterDisplayName,
       totalDurationMs: loadedChapter.totalDurationMs,
       showBismillah:   loadedChapter.showBismillah,
     };
@@ -191,11 +217,19 @@ export function ExportModal({ onClose }: Props) {
     const canvasStream = canvas.captureStream(30);
     if (audioTrack) canvasStream.addTrack(audioTrack);
 
+    // webm d'abord (Chrome/Firefox/Edge/Android) — Safari (iOS/macOS) ne le
+    // supporte pas du tout et n'accepte que mp4, avec un codec explicite.
     const mimeType =
-      MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus") ? "video/webm;codecs=vp9,opus" :
-      MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus") ? "video/webm;codecs=vp8,opus" :
-      MediaRecorder.isTypeSupported("video/webm")                 ? "video/webm" :
-      "video/mp4";
+      MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")      ? "video/webm;codecs=vp9,opus" :
+      MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")      ? "video/webm;codecs=vp8,opus" :
+      MediaRecorder.isTypeSupported("video/webm")                      ? "video/webm" :
+      MediaRecorder.isTypeSupported("video/mp4;codecs=avc1,mp4a.40.2") ? "video/mp4;codecs=avc1,mp4a.40.2" :
+      MediaRecorder.isTypeSupported("video/mp4")                      ? "video/mp4" :
+      null;
+
+    if (!mimeType) {
+      throw new Error("Aucun format vidéo enregistrable n'est supporté par ce navigateur. Essayez avec Chrome, Firefox ou une version récente de Safari.");
+    }
 
     // Les sourates longues récitées par certains récitateurs durent plusieurs
     // heures (ex. Al-Baqarah ~90min+) — à 5 Mbps ça représente plusieurs Go
@@ -370,7 +404,7 @@ export function ExportModal({ onClose }: Props) {
     }
 
     rafRef.current = requestAnimationFrame(tick);
-  }, [config, loadedChapter, reciter]); // doStartRecording
+  } // doStartRecordingInner
 
   function triggerDownload() {
     if (!blob) return;
@@ -431,7 +465,7 @@ export function ExportModal({ onClose }: Props) {
               <div className="rounded-xl border border-studio-border bg-studio-surface p-4 space-y-2.5">
                 <InfoRow label="Sourate"    value={loadedChapter?.surah.name_french ?? "—"} />
                 <InfoRow label="Versets"    value={`${config.fromVerse} → ${config.toVerse} (${verseCount} versets)`} />
-                <InfoRow label="Récitateur" value={reciter?.name ?? "—"} />
+                <InfoRow label="Récitateur" value={reciterDisplayName} />
                 <InfoRow label="Durée"      value={`~${durationSec}s`} />
                 <InfoRow label="Format"     value={`${config.aspectRatio} · ${config.resolution}`} />
               </div>

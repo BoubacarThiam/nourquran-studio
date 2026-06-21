@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
-import { Search, ChevronRight, Loader2, ChevronDown } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Search, ChevronRight, Loader2, ChevronDown, Upload, Music, X } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useSurahsLoader } from "@/hooks/useChapterLoader";
 import { RECITERS } from "@/lib/quran/reciters";
+import { CUSTOM_RECITER_ID, loadCustomAudioFile } from "@/lib/quran/customAudio";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { AspectRatio } from "@/types/quran";
@@ -33,11 +34,43 @@ const TRANSLATION_OPTIONS = [
 const inputCls = "w-full bg-studio-surface border border-studio-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold/50 transition-all duration-200 placeholder:text-muted-foreground/50";
 
 export function ContentTab() {
-  const config    = useEditorStore((s) => s.config);
-  const setConfig = useEditorStore((s) => s.setConfig);
+  const config        = useEditorStore((s) => s.config);
+  const setConfig     = useEditorStore((s) => s.setConfig);
+  const customAudio   = useEditorStore((s) => s.customAudio);
+  const setCustomAudio = useEditorStore((s) => s.setCustomAudio);
   const surahs    = useSurahsLoader();
   const [search, setSearch]     = useState("");
   const [showList, setShowList] = useState(false);
+  const [importState, setImportState] = useState<"idle" | "loading" | "error">("idle");
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const isCustomActive = config.reciterId === CUSTOM_RECITER_ID;
+
+  async function handleFileSelected(file: File | undefined) {
+    if (!file) return;
+    setImportState("loading");
+    setImportError(null);
+    try {
+      const audio = await loadCustomAudioFile(file);
+      // Libère l'ancienne URL blob si on remplace un import précédent.
+      if (customAudio) URL.revokeObjectURL(customAudio.url);
+      setCustomAudio(audio);
+      setConfig({ reciterId: CUSTOM_RECITER_ID });
+      setImportState("idle");
+    } catch (err) {
+      setImportError((err as Error).message);
+      setImportState("error");
+    }
+  }
+
+  function removeCustomAudio() {
+    if (customAudio) URL.revokeObjectURL(customAudio.url);
+    setCustomAudio(null);
+    setImportState("idle");
+    setImportError(null);
+    setConfig({ reciterId: 97 });
+  }
 
   const selectedSurah = surahs.find((s) => s.id === config.surahId);
 
@@ -204,10 +237,49 @@ export function ContentTab() {
       {/* Récitateur */}
       <section className="space-y-2">
         <SectionLabel>Récitateur</SectionLabel>
+
+        {/* Import d'une récitation personnelle */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          className="sr-only"
+          onChange={(e) => { handleFileSelected(e.target.files?.[0]); e.target.value = ""; }}
+        />
+        {isCustomActive && customAudio ? (
+          <div className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm border border-emerald/30 bg-emerald/10">
+            <Music className="w-4 h-4 text-emerald flex-shrink-0" />
+            <span className="text-xs text-foreground truncate flex-1">{customAudio.fileName}</span>
+            <button
+              onClick={removeCustomAudio}
+              aria-label="Retirer la récitation importée"
+              className="min-w-7 min-h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground cursor-pointer flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importState === "loading"}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm border border-dashed border-studio-border hover:border-gold/40 hover:bg-gold/5 transition-all duration-200 cursor-pointer text-left disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-gold/40"
+          >
+            {importState === "loading"
+              ? <Loader2 className="w-4 h-4 text-gold flex-shrink-0 animate-spin" />
+              : <Upload className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+            <span className="text-xs text-muted-foreground flex-1">
+              {importState === "loading" ? "Lecture du fichier…" : "Importer ma récitation (MP3, WAV…)"}
+            </span>
+          </button>
+        )}
+        {importState === "error" && importError && (
+          <p className="text-[11px] text-destructive px-1">{importError}</p>
+        )}
+
         <div className="space-y-1">
           {RECITERS.map((r) => {
             const active = config.reciterId === r.id;
-            const isPriority = r.id === 97 || r.id === 0;
+            const isPriority = r.id === 97;
             return (
               <button
                 key={r.id}

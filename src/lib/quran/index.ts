@@ -4,9 +4,11 @@
  *
  * Architecture :
  *   - Quran.com v4  → texte Uthmani, traductions, mots
- *   - QuranCDN      → audio chapitre + timestamps mot-à-mot (reciters avec timing)
- *   - mp3quran.net  → audio chapitre sans timing (Al-Luhaidan, Maher Al-Muaiqly)
- *   - everyayah.com → audio par verset (fallback ultime)
+ *   - QuranCDN      → audio chapitre + timestamps mot-à-mot (tous les récitateurs proposés)
+ *   - everyayah.com → audio par verset (fallback)
+ *   - estimation par nombre de mots calibrée sur la durée réelle → utilisée
+ *     uniquement pour l'import de récitation personnelle (voir customAudio.ts) ;
+ *     les récitateurs intégrés sans timing réel ont été retirés de la liste.
  */
 
 export { fetchSurahs, fetchSurah } from "./surahs";
