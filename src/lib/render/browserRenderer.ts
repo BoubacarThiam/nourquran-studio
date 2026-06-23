@@ -331,6 +331,9 @@ export function renderCompositionFrame({
   // Équivalent au `gap: 24` du flexbox de l'aperçu Remotion (VerseDisplay.tsx),
   // mis à l'échelle comme les polices.
   const GAP = 24 * scale;
+  const arabicWords = rv.words.filter((w) => w.char_type === "word");
+  const [t1, t2]    = rv.translations;
+  const hasVerseNum = rv.verse_number > 0;
 
   // ── Mesure de chaque section avant dessin ───────────────────────────
   // L'aperçu Remotion empile numéro + texte arabe + séparateur + traduction(s)
@@ -339,71 +342,88 @@ export function renderCompositionFrame({
   // seulement le texte arabe à un point fixe faisait soit chevaucher la
   // traduction avec les lignes basses d'un verset long ("verset et traduction
   // mélangés"), soit la repousser hors-cadre (ex. Ayat al-Kursi, 7 lignes).
-  // On mesure donc la hauteur réelle de CHAQUE section, puis on positionne le
-  // bloc entier comme un tout selon textPosition — exactement comme le ferait
-  // justifyContent côté Remotion.
-  const arabicWords = rv.words.filter((w) => w.char_type === "word");
-  ctx.font = `${arabicFontSize}px ${fontFamily}`;
-  const arabicTotalH = arabicWords.length > 0
-    ? getKaraokeLayout(ctx, arabicWords, rv.verse_key, arabicFontSize, fontFamily, maxTextW).totalH
-    : Math.max(1, wrapTextLines(ctx, rv.text_uthmani, maxTextW).length) * arabicFontSize * 1.3;
+  // `measureBlock` mesure la hauteur réelle de CHAQUE section pour un facteur
+  // d'échelle donné — appelé une 2e fois avec un facteur réduit si le bloc ne
+  // rentre pas dans le cadre (ex. ratio 16:9, peu de hauteur disponible, ou
+  // police agrandie manuellement), pour qu'aucun texte ne déborde jamais de
+  // la vidéo exportée.
+  function measureBlock(fitScale: number) {
+    const aFontSize  = Math.max(8, Math.round(arabicFontSize * fitScale));
+    const vFontSize  = Math.max(7, Math.round(16 * scale * fitScale));
+    const tFontSize  = Math.max(6, Math.round(scaledTransFontSize * fitScale));
+    const t2FontSize = Math.round(tFontSize * 0.82);
+    const gap        = GAP * fitScale;
 
-  const hasVerseNum      = rv.verse_number > 0;
-  const verseNumFontSize = Math.max(8, Math.round(16 * scale));
-  const verseNumH        = Math.round(verseNumFontSize * 1.2) + Math.round(8 * scale); // ligne + marginBottom Remotion
+    ctx.font = `${aFontSize}px ${fontFamily}`;
+    const arabicTotalH = arabicWords.length > 0
+      ? getKaraokeLayout(ctx, arabicWords, rv.verse_key, aFontSize, fontFamily, maxTextW).totalH
+      : Math.max(1, wrapTextLines(ctx, rv.text_uthmani, maxTextW).length) * aFontSize * 1.3;
 
-  const [t1, t2] = rv.translations;
-  const t1LineH = scaledTransFontSize * 1.75;
-  ctx.font = `${scaledTransFontSize}px "Inter", "Helvetica", sans-serif`;
-  const t1Lines = t1?.text ? wrapTextLines(ctx, t1.text, maxTextW * 0.78) : [];
-  const t1H = t1Lines.length * t1LineH;
+    const verseNumH = Math.round(vFontSize * 1.2) + Math.round(8 * scale * fitScale); // ligne + marginBottom Remotion
 
-  const t2Size  = Math.round(scaledTransFontSize * 0.82);
-  const t2LineH = t2Size * 1.75;
-  ctx.font = `italic ${t2Size}px "Inter", "Helvetica", sans-serif`;
-  const t2Lines = t2?.text ? wrapTextLines(ctx, t2.text, maxTextW * 0.78) : [];
-  const t2H = t2Lines.length * t2LineH;
+    const t1LineH = tFontSize * 1.75;
+    ctx.font = `${tFontSize}px "Inter", "Helvetica", sans-serif`;
+    const t1Lines = t1?.text ? wrapTextLines(ctx, t1.text, maxTextW * 0.78) : [];
+    const t1H = t1Lines.length * t1LineH;
 
-  const sectionHeights = [
-    hasVerseNum ? verseNumH : 0,
-    arabicTotalH,
-    1, // séparateur
-    t1H,
-    t2H,
-  ].filter((h) => h > 0);
-  const blockH = sectionHeights.reduce((a, b) => a + b, 0) + GAP * Math.max(0, sectionHeights.length - 1);
+    const t2LineH = t2FontSize * 1.75;
+    ctx.font = `italic ${t2FontSize}px "Inter", "Helvetica", sans-serif`;
+    const t2Lines = t2?.text ? wrapTextLines(ctx, t2.text, maxTextW * 0.78) : [];
+    const t2H = t2Lines.length * t2LineH;
 
-  const edgePad  = height * 0.08; // équivalent au padding 8% du conteneur Remotion
+    const sectionHeights = [
+      hasVerseNum ? verseNumH : 0,
+      arabicTotalH,
+      1, // séparateur
+      t1H,
+      t2H,
+    ].filter((h) => h > 0);
+    const blockH = sectionHeights.reduce((a, b) => a + b, 0) + gap * Math.max(0, sectionHeights.length - 1);
+
+    return {
+      aFontSize, vFontSize, tFontSize, t2FontSize, gap,
+      arabicTotalH, verseNumH, t1Lines, t1H, t1LineH, t2Lines, t2H, t2LineH, blockH,
+    };
+  }
+
+  const edgePad        = height * 0.08; // équivalent au padding 8% du conteneur Remotion
+  const maxAvailableH  = height - edgePad * 2;
+  let m = measureBlock(1);
+  if (m.blockH > maxAvailableH) {
+    const fitScale = Math.max(0.35, maxAvailableH / m.blockH);
+    m = measureBlock(fitScale);
+  }
+
   const blockTop =
     textPosition === "top"    ? edgePad :
-    textPosition === "bottom" ? height - edgePad - blockH :
-    (height - blockH) / 2;
+    textPosition === "bottom" ? height - edgePad - m.blockH :
+    (height - m.blockH) / 2;
 
   let cursorY = blockTop;
 
   // ── Numéro de verset (absent pour la basmala, qui n'a pas de numéro réel) ──
   if (hasVerseNum) {
-    ctx.font         = `${verseNumFontSize}px sans-serif`;
+    ctx.font         = `${m.vFontSize}px sans-serif`;
     ctx.fillStyle    = "rgba(250,189,0,0.65)";
     ctx.textAlign    = "center";
     ctx.textBaseline = "top";
     ctx.direction    = "ltr";
     ctx.fillText(`﴾ ${rv.verse_key} ﴿`, width / 2, cursorY);
-    cursorY += verseNumH + GAP;
+    cursorY += m.verseNumH + m.gap;
   }
 
   // ── Texte arabe karaoké ───────────────────────────────────────────
-  const arabicCenterY = cursorY + arabicTotalH / 2;
+  const arabicCenterY = cursorY + m.arabicTotalH / 2;
   if (arabicWords.length > 0) {
     drawArabicKaraoke(
       ctx, arabicWords, rv.verse_key, wordTimingMs,
       width / 2, arabicCenterY,
-      arabicFontSize, fontFamily,
+      m.aFontSize, fontFamily,
       arabicColor, highlightColor, maxTextW,
     );
   } else {
     // Fallback : afficher le texte complet du verset si aucun mot trouvé
-    ctx.font         = `${arabicFontSize}px ${fontFamily}`;
+    ctx.font         = `${m.aFontSize}px ${fontFamily}`;
     ctx.fillStyle    = arabicColor;
     ctx.textAlign    = "center";
     ctx.textBaseline = "middle";
@@ -411,7 +431,7 @@ export function renderCompositionFrame({
     ctx.fillText(rv.text_uthmani, width / 2, arabicCenterY);
     ctx.direction    = "ltr";
   }
-  cursorY += arabicTotalH + GAP;
+  cursorY += m.arabicTotalH + m.gap;
 
   // ── Séparateur doré ───────────────────────────────────────────────
   const sepY    = cursorY;
@@ -425,27 +445,27 @@ export function renderCompositionFrame({
   ctx.moveTo(width / 2 - 30, sepY);
   ctx.lineTo(width / 2 + 30, sepY);
   ctx.stroke();
-  cursorY += 1 + GAP;
+  cursorY += 1 + m.gap;
 
   // ── Traduction principale ─────────────────────────────────────────
-  if (t1Lines.length > 0) {
-    ctx.font         = `${scaledTransFontSize}px "Inter", "Helvetica", sans-serif`;
+  if (m.t1Lines.length > 0) {
+    ctx.font         = `${m.tFontSize}px "Inter", "Helvetica", sans-serif`;
     ctx.fillStyle    = "rgba(255,255,255,0.88)";
     ctx.textAlign    = "center";
     ctx.textBaseline = "top";
     ctx.direction    = "ltr";
-    t1Lines.forEach((l, i) => ctx.fillText(l, width / 2, cursorY + i * t1LineH));
-    cursorY += t1H + GAP;
+    m.t1Lines.forEach((l, i) => ctx.fillText(l, width / 2, cursorY + i * m.t1LineH));
+    cursorY += m.t1H + m.gap;
   }
 
   // ── Traduction secondaire / translittération ────────────────────────
-  if (t2Lines.length > 0) {
-    ctx.font         = `italic ${t2Size}px "Inter", "Helvetica", sans-serif`;
+  if (m.t2Lines.length > 0) {
+    ctx.font         = `italic ${m.t2FontSize}px "Inter", "Helvetica", sans-serif`;
     ctx.fillStyle    = "rgba(255,255,255,0.50)";
     ctx.textAlign    = "center";
     ctx.textBaseline = "top";
     ctx.direction    = "ltr";
-    t2Lines.forEach((l, i) => ctx.fillText(l, width / 2, cursorY + i * t2LineH));
+    m.t2Lines.forEach((l, i) => ctx.fillText(l, width / 2, cursorY + i * m.t2LineH));
   }
 
   ctx.globalAlpha = 1;
